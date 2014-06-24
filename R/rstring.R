@@ -850,12 +850,12 @@ Author(s):
 '
         
         postFormParams = list(identifiers=paste(stringIds, collapse=" ") )
-        if(!is.null(colors)) postFormParams = c(postFormParams, colors=paste(colors, collapse=" "))
-        if(!is.null(comments)) postFormParams = c(postFormParams, comments=paste(comments, collapse=" "))
-        if(!is.null(links)) postFormParams = c(postFormParams, links=paste(links, collapse=" "))
-        if(!is.null(iframe_urls)) postFormParams = c(postFormParams, iframe_urls=paste(iframe_urls, collapse=" "))
-        if(!is.null(logo_imgF)) postFormParams = c(postFormParams, logo_img=fileUpload(logo_imgF))
-        if(!is.null(legend_imgF)) postFormParams = c(postFormParams, legend_img=fileUpload(legend_imgF))
+        if(!is.null(colors)) postFormParams = c(postFormParams, list(colors=paste(colors, collapse=" ")))
+        if(!is.null(comments)) postFormParams = c(postFormParams, list(comments=paste(comments, collapse=" ")))
+        if(!is.null(links)) postFormParams = c(postFormParams, list(links=paste(links, collapse=" ")))
+        if(!is.null(iframe_urls)) postFormParams = c(postFormParams, list(iframe_urls=paste(iframe_urls, collapse=" ")))
+        if(!is.null(logo_imgF)) postFormParams = c(postFormParams, list(logo_img=fileUpload(logo_imgF)))
+        if(!is.null(legend_imgF)) postFormParams = c(postFormParams, list(legend_img=fileUpload(legend_imgF)))
         postRs = postFormSmart(paste("http://string-db.org/version_", version, "/newstring_cgi/webservices/post_payload.pl", sep=""),  .params = postFormParams)
         return(postRs)
       },
