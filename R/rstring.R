@@ -67,8 +67,8 @@ Author(s):
           species <<- 9606                        
         }
         if(length(version)==0) {
-          cat("WARNING: You didn't specify a version of the STRING database to use. Hence we will use STRING 9_05.\n")
-          version <<- "9_05"                        
+          cat("WARNING: You didn't specify a version of the STRING database to use. Hence we will use STRING 9_1.\n")
+          version <<- "9_1"                        
           current_version = as.character(read.table(url("http://string.uzh.ch/permanent/string/current_version"))$V1)
           if(current_version != version) cat("WARNING: A new version of the STRING R plugin has been released: we suggest you to install the latest version from Bioconductor.\n")
         }else{
@@ -247,6 +247,11 @@ Author(s):
         ann = subset(ann, category==temp_category)
         if(!is.null(backgroundV)) ann = subset(ann, STRING_id %in% backgroundV )
         if(!iea) ann = subset(ann, type != "IEA")
+        if(nrow(ann)==0){
+          cat("\nWARNING: No annotations are present for this species with the following input parameters.
+              Please try to change species and/or parameters or try to contact our support.\n")
+          return(NULL)
+        }
         dfcount = suppressWarnings(sqldf('select term_id, count(STRING_id) as proteins from ann group by term_id', stringsAsFactors=FALSE))
         annHits = subset(ann, STRING_id %in% string_ids)
         dfcountHits = suppressWarnings(sqldf('select term_id, count(STRING_id) as hits from annHits group by term_id', stringsAsFactors=FALSE))
@@ -401,7 +406,7 @@ Author(s):
         if(is.null(required_score) ) required_score = score_threshold
         string_ids = unique(string_ids)
         urlStr = paste("http://string-db.org/version_",version,"/newstring_cgi/link_to.pl", sep="" )
-        #urlStr = paste("http://130.60.240.82:8818/newstring_cgi/link_to.pl", sep="" )
+        #urlStr = paste("http://130.60.240.90:8380/newstring_cgi/link_to.pl", sep="" )
         identifiers=""
         for(id in string_ids ){   identifiers = paste(identifiers, id, "%0D", sep="")}
         params=list(required_score=required_score, limit=0, network_flavor=network_flavor, identifiers=identifiers)
@@ -467,6 +472,7 @@ Author(s):
         string_ids = unique(string_ids)
         string_ids = string_ids[!is.na(string_ids)]
         urlStr = paste("http://string-db.org/version_", version, "/api/image/network", sep="" )
+        #urlStr = paste("http://130.60.240.90:8380/api/image/network", sep="" )
         identifiers=""
         for(id in string_ids ){ identifiers = paste(identifiers, id, "%0D", sep="")}
         params = list(output="image", required_score=required_score, limit=0, network_flavor=network_flavor, identifiers=identifiers)
@@ -857,6 +863,8 @@ Author(s):
         if(!is.null(logo_imgF)) postFormParams = c(postFormParams, list(logo_img=fileUpload(logo_imgF)))
         if(!is.null(legend_imgF)) postFormParams = c(postFormParams, list(legend_img=fileUpload(legend_imgF)))
         postRs = postFormSmart(paste("http://string-db.org/version_", version, "/newstring_cgi/webservices/post_payload.pl", sep=""),  .params = postFormParams)
+        
+        #postRs = postForm(paste("http://130.60.240.90:8380/newstring_cgi/webservices/post_payload.pl", sep=""),  .params = postFormParams, style = 'HTTPPOST')
         return(postRs)
       },
       
