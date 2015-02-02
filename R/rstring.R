@@ -298,14 +298,14 @@ Author(s):
               Please try to change species and/or parameters or try to contact our support.\n")
           return(NULL)
         }
-        dfcount = suppressWarnings(sqldf('select term_id, count(STRING_id) as proteins from ann group by term_id', stringsAsFactors=FALSE))
+        dfcount = suppressWarnings(sqldf('select term_id, count(STRING_id) as proteinsCount from ann group by term_id', stringsAsFactors=FALSE))
         annHits = subset(ann, STRING_id %in% string_ids)
         dfcountHits = suppressWarnings(sqldf('select term_id, count(STRING_id) as hits from annHits group by term_id', stringsAsFactors=FALSE))
         dfcountMerged = merge(dfcount, dfcountHits, by.x="term_id", by.y="term_id", all.x=TRUE)
-        dfcountMerged = subset(dfcountMerged, proteins<=1500)
+        dfcountMerged = subset(dfcountMerged, proteinsCount<=1500)
         #dfcountMerged2 = data.frame(dfcountMerged, n = length(unique(ann$STRING_id)) - dfcountMerged$proteins, k = length(unique(annHits$STRING_id)))
-        dfcountMerged2 = data.frame(dfcountMerged, n = nrow(get_proteins()) - dfcountMerged$proteins, k = length(unique(annHits$STRING_id)))
-        dfcountMerged3 = data.frame(dfcountMerged2, pvalue= phyper(dfcountMerged2$hits-1, dfcountMerged2$proteins, dfcountMerged2$n, dfcountMerged2$k, FALSE))
+        dfcountMerged2 = data.frame(dfcountMerged, n = nrow(get_proteins()) - dfcountMerged$proteinsCount, k = length(unique(annHits$STRING_id)))
+        dfcountMerged3 = data.frame(dfcountMerged2, pvalue= phyper(dfcountMerged2$hits-1, dfcountMerged2$proteinsCount, dfcountMerged2$n, dfcountMerged2$k, FALSE))
         dfcountMerged4 = dfcountMerged3
         if(!is.null(methodMT)) dfcountMerged4 = data.frame(dfcountMerged3, pvalue_fdr = p.adjust(dfcountMerged3$pvalue, method=methodMT, n=nrow(subset(dfcountMerged3, !is.na(pvalue))) ))
         dfcountMerged4 = subset(dfcountMerged4, !is.na(pvalue))
@@ -313,6 +313,7 @@ Author(s):
         dfcountMerged4 = delColDf(dfcountMerged4, "k")
         annDesc = get_annotations_desc()
         dfcountMerged5 = arrange(merge(dfcountMerged4, annDesc, by.x="term_id", by.y="term_id", all.x=TRUE), pvalue)
+        dfcountMerged5 = renameColDf(dfcountMerged5, "proteinsCount", "proteins")  
         return(dfcountMerged5)
       },
       
