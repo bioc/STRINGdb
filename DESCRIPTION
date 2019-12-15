@@ -5,7 +5,7 @@ Version: 1.27.0
 Date: 2016-03-31
 Author: Andrea Franceschini <andrea.franceschini@isb-sib.ch>
 Maintainer: Damian Szklarczyk <damian.szklarczyk@imls.uzh.ch>
-Description: The STRINGdb package provides a R interface to the STRING protein-protein interactions database (http://www.string-db.org).
+Description: The STRINGdb package provides a R interface to the STRING protein-protein interactions database (https://www.string-db.org).
 License: GPL-2
 Depends: R (>= 2.14.0)
 Imports: png, sqldf, plyr, igraph, RCurl, methods, RColorBrewer, gplots, hash, plotrix
