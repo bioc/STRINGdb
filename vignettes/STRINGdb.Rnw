@@ -26,9 +26,9 @@
 \section{INTRODUCTION}
 
 
-STRING (http://www.string-db.org) is a database of known and predicted protein-protein interactions. 
+STRING (https://www.string-db.org) is a database of known and predicted protein-protein interactions. 
 The interactions include direct (physical) and indirect (functional) associations. 
-The database contains information from numerous sources, including experimental repositories, computational prediction methods and public text collections. Each interaction is associated with a combined confidence score that integrates the various evidences.  We currently cover 5'214'234 proteins from 1133 organisms.
+The database contains information from numerous sources, including experimental repositories, computational prediction methods and public text collections. Each interaction is associated with a combined confidence score that integrates the various evidences.  We currently cover over 24 milions proteins from 5090 organisms.
 
 As you will learn in this guide, the STRING database can be usefull to add meaning to list of genes (e.g. the best hits coming out from a screen or the most differentially expressed genes coming out from a Microarray/RNAseq experiment.)
 
@@ -39,13 +39,7 @@ In the STRINGdb R package we use the new ReferenceClasses of R (search for "Refe
 
 To begin, you should first know the NCBI taxonomy identifiers of the organism on which you have performed the experiment (e.g. 9606 for Human, 10090 for mouse). 
 If you don't know that, you can search the NCBI Taxonomy (http://www.ncbi.nlm.nih.gov/taxonomy)  or start looking at our species table (that you can also use to verify that your organism is represented in the STRING database). \\
-Hence, if your species is not Human (i.e. our default species), you can use this function to retrieve/search our species table:
-
-<<species, eval=FALSE>>=
-get_STRING_species(version="10", species_name=NULL)
-@ 
-
-
+Hence, if your species is not Human (i.e. our default species), you can find it and their taxonomy identifiers on STRING webpage under the 'organisms' section (https://string-db.org/cgi/input.pl?input_page_active_form=organisms) or download the full list in the download section of STRING website.
 
 \begin{Schunk}
 \begin{Sinput}
@@ -55,8 +49,8 @@ get_STRING_species(version="10", species_name=NULL)
 
 <<initialization>>=
 library(STRINGdb)
-string_db <- STRINGdb$new( version="10", species=9606, 
-                           score_threshold=0, input_directory="" )
+string_db <- STRINGdb$new( version="11", species=9606, 
+                           score_threshold=200, input_directory="")
 @
 
 \begin{Schunk}
@@ -66,8 +60,8 @@ string_db <- STRINGdb$new( version="10", species=9606,
 \end{Schunk}
 
 As it has been shown in the above commands, you start instantiating the STRINGdb reference class.
-In the constructor of the class you can also define the STRING version to be used and a threshold for the combined scores of the interactions, such that any interaction below that threshold is not loaded in the object (by default the score threshold is set to 400 ! ).\\
-Besides, if you specify a local directory to the parameter input-directory, all the database files will be downloaded into this directory and the package can then be used off-line. Otherwise, the database files will be saved and cached in a temporary directory that will be cleaned automatically when the R session is closed.\\\\
+In the constructor of the class you can also define the STRING version to be used and a threshold for the combined scores of the interactions, such that any interaction below that threshold is not loaded in the object (by default the score threshold is set to 400).\\
+Besides, if you specify a local directory to the parameter input-directory, the database files will be downloaded into this directory and most of the methods can be used off-line. Otherwise, the database files will be saved and cached in a temporary directory that will be cleaned automatically when the R session is closed.\\\\
 
 For a better understanding of the package two other commands can be useful:
 
@@ -110,15 +104,13 @@ example1_mapped <- string_db$map( diff_exp_example1, "gene", removeUnmappedRows 
 
 As you may have noticed, the previous command prints a warning showing the number of genes that we failed to map. In this particular example, we cannot map all the probes of the microarray that refer to position of the chromosome that are not assigned to a real gene (i.e. all the LOC genes). If we remove all these LOC genes before the mapping we obtain a much lower percentage of unmapped genes (i.e. < 6 \%). \\
 If you set to FALSE the "removeUnmappedRows" parameter, than the rows which corresponds to unmapped genes are left and you can manually inspect them.\\
-Finally, we extract the best 200 genes and we produce an image of the STRING network for those.
+Finally, we extract the most significant 200 genes and we produce an image of the STRING network for those.
 The image shows clearly the genes and how they are possibly functionally related.
 On the top of the plot, we insert a pvalue that represents the probability that you can expect such an equal or greater number of interactions by chance.
-Besides, on the bottom, there is a short-url that points to the relative page on our web-interface. You can copy and paste that url on your favorite browser and/or send it via e-mail to your colleagues or insert it in publications.
 
 <<echo=false>>=
 options(SweaveHooks=list(fig=function()
 par(mar=c(2.1, 0.1, 4.1, 2.1))))
-#par(mar=c(1.1, 0.1, 4.1, 2.1))))
 @
 \setkeys{Gin}{width=1.2\linewidth}
 
@@ -141,7 +133,7 @@ string_db$plot_network( hits )
 
 \section{PAYLOAD MECHANISM}
 
-This R library provides the ability to interact with the STRING payload mechanism. The payload appears as an additional colored "halo" that starts from the boder of the bubbles.
+This R library provides the ability to interact with the STRING payload mechanism. The payload appears as an additional colored "halo" around the bubbles.
 
 For example, this allows to color in green the genes that are down-regulated and in red the genes that are up-regulated.
 For this mechanism to work, we provide a function that posts the information on our web server.
@@ -175,38 +167,11 @@ string_db$plot_network( hits, payload_id=payload_id )
 
 \section{ENRICHMENT}
 
-
-We provide a method to compute (and visualize) the enrichment in protein-protein interactions along a sorted list of proteins.
-In the context of genome-wide screens (e.g. RNAi or proteomics), it can be useful to visualize the distribution of the enrichment in the resulting sorted list of genes. If the experiment was successful, and the top hits have protein-protein interactions, you should see more enrichment at the beginning of the list than at the end. 
-Besides, you can also use the enrichment graph to help you to define a threshold on the number of proteins to consider (for example, if you see a strong enrichment up to position 600 on your list, this means that the signal is probably sparsed to cover the best 600 genes).
-
-<<echo=false>>=
-options(SweaveHooks=list(fig=function()
-par(mar=c(2.1, 2.1, 4.1, 2.1))))
-@
-\setkeys{Gin}{width=0.8\linewidth}
-<<plot_ppi_enrichment, fig=TRUE>>=
-# plot the enrichment for the best 1000 genes
-string_db$plot_ppi_enrichment( example1_mapped$STRING_id[1:1000], quiet=TRUE ) 
-@
-
-
-
-\begin{Schunk}
-\begin{Sinput}
-
-\end{Sinput}
-\end{Schunk}
-\pagebreak
-
-We also provide a method to compute the enrichment in Gene Ontology, KEGG pathway and Interpro domains, similar to the "enrichment" widget in our web-interface.
-The enrichment is computed using an hypergeometric test. The multiple testing correction method can be changed (setting the methodMT parameter) and it is also possible to specify whether to use the "Inferred from Elettronic Annotations" or only the manually curated annotations.
+We provide a method to compute the enrichment in Gene Ontology (Process, Function and Component), KEGG and Reactome pathways, PubMed publications, UniProt Keywords, and PFAM/INTERPRO/SMART domains for your set of proteins all in one simple call. The enrichment itself is computed using an hypergeometric test and the FDR is calculated using Benjamini-Hochberg procedure.
 
 <<enrichment>>=
-enrichmentGO <- string_db$get_enrichment( hits, category = "Process", methodMT = "fdr", iea = TRUE )
-enrichmentKEGG <- string_db$get_enrichment( hits, category = "KEGG", methodMT = "fdr", iea = TRUE )
-head(enrichmentGO, n=7)
-head(enrichmentKEGG, n=7)
+enrichment <- string_db$get_enrichment( hits )
+head(enrichment, n=20)
 @
 
 \begin{Schunk}
@@ -215,7 +180,7 @@ head(enrichmentKEGG, n=7)
 \end{Sinput}
 \end{Schunk}
 
-If you have performed your experiment on a predefined set of proteins, it is important to run the enrichment statistics using that set as a background (otherwise you would get a wrong p-value !). Hence, before to launch the methods explained above, you should set the background:
+If you have performed your experiment on a predefined set of proteins, it is important to run the enrichment statistics using that set as a background (otherwise you would get a wrong p-value !). Hence, before to launch the method above, you may want to set the background:
 
 <<background, eval=FALSE>>=
 backgroundV <- example1_mapped$STRING_id[1:2000]   # as an example, we use the first 2000 genes                                                    
@@ -225,7 +190,7 @@ string_db$set_background(backgroundV)
 You can also set the background when you instantiate the STRINGdb object:
 
 <<new_background_inst, eval=FALSE>>=
-string_db <- STRINGdb$new( score_threshold=0, backgroundV = backgroundV )
+string_db <- STRINGdb$new( score_threshold=200, backgroundV = backgroundV )
 @
 
 \begin{Schunk}
@@ -233,13 +198,24 @@ string_db <- STRINGdb$new( score_threshold=0, backgroundV = backgroundV )
 
 \end{Sinput}
 \end{Schunk}
-If you want to compare the enrichment of two or more lists of genes (e.g. the results of two experiments), you can use our HEATMAP visualization option:
 
-<<enrichmentHeatmap, eval=FALSE>>=
-eh <- string_db$enrichment_heatmap( list( hits[1:100], hits[101:200]),
-                                    list("list1","list2"), title="My Lists" )
+If you just want to know terms are assigned to your set of proteins (and not necessary enriched) you can use "get\_annotations" method. This method will output all the terms from most of the categories (the exceptions are KEGG terms due to licensing issues and PubMed due to the size of the output) that are associated with your set of proteins. 
+
+<<enrichment>>=
+annotations <- string_db$get_annotations( hits )
+head(annotations, n=20)
 @
-\includegraphics{heatmap_enrichment_example.pdf}
+
+\begin{Schunk}
+\begin{Sinput}
+
+\end{Sinput}
+\end{Schunk}
+
+
+
+
+
 
 \section{CLUSTERING}
 
@@ -271,11 +247,10 @@ for(i in seq(1:4)){
 \end{Schunk}
 
 
-
 \section{ADDITIONAL PROTEIN INFORMATION}
 
-You can get a table that contains all the proteins that are present in our database.
-The protein table also include the name, the size and a short description of the proteins.
+You can get a table that contains all the proteins that are present in our database of the species of interest. 
+The protein table also include the preferred name, the size and a short description of each protein.
 
 <<proteins>>=
 string_proteins <- string_db$get_proteins()
@@ -325,12 +300,6 @@ Using the "get\_interactions" method we can clearly see that TP53 and ATM intera
 string_db$get_interactions( c(tp53, atm) )
 @
 
-Using the get\_pubmed\_interactions method we can retrieve the pubmed identifiers of the articles that contain the name of both the proteins (if any). Such articles could support to the interaction.
-
-<<pubmedInteractions, eval=FALSE>>=
-string_db$get_pubmed_interaction( tp53, atm )
-@
-
 \begin{Schunk}
 \begin{Sinput}
 
@@ -338,12 +307,11 @@ string_db$get_pubmed_interaction( tp53, atm )
 \end{Schunk}
 
 
-STRING also provides a way to get homologous proteins: in our database we store an ALL-AGAINST-ALL blast alignment of all our 5 million proteins.
-The method "get\_homologs\_besthits" can be used to get the best hits of your proteins in all the >1000 STRING species (with the "symbets" parameter you can limit the search to the reciprocal\_best\_hits.  This increase the confidence to get orthologs and not paralogous proteins)
+STRING provides a way to get homologous proteins: in our database we store ALL-AGAINST-ALL alignments within all 5090 organisms. You can retrive all of the paralogs of the protein using "get\_paralogs" method.  
 
-<<homologs, eval=FALSE>>=
-# get the reciprocal best hits of the following protein in all the STRING species
-string_db$get_homologs_besthits(tp53, symbets = TRUE)
+<<paralogs, eval=FALSE>>=
+# Get all homologs of TP53 in human.
+string_db$get_paralogs(tp53)
 @
 \begin{Schunk}
 \begin{Sinput}
@@ -351,66 +319,27 @@ string_db$get_homologs_besthits(tp53, symbets = TRUE)
 \end{Sinput}
 \end{Schunk}
 
-In addition, you can get all the homologous in a given species (i.e. all the blast hits): 
+STRING also stores best hits (as measured by bitscore) between the proteins from different species. "get\_homologs\_besthits" lets you retrieve these homologs.
 
-<<homologs2, eval=FALSE>>=
+<<Closest homologs from other species, eval=FALSE>>=
+# get the best hits of the following protein in all the STRING species
+string_db$get_homologs_besthits(tp53)
+@
+\begin{Schunk}
+\begin{Sinput}
+
+\end{Sinput}
+\end{Schunk}
+
+... or you can specify the species of interest (i.e. all the blast hits): 
+
+<<homologs_besthits in target species, eval=FALSE>>=
 # get the homologs of the following two proteins in the mouse (i.e. species_id=10090)
-string_db$get_homologs(c(tp53, atm), target_species_id=10090, bitscore_threshold=60 )
+string_db$get_homologs_besthits(c(tp53, atm), target_species_id=10090, bitscore_threshold=60)
 @
 
 \begin{Schunk}
 \begin{Sinput}
-
-
-\end{Sinput}
-\end{Schunk}
-
-
-
-\section{BENCHMARKING PROTEIN-PROTEIN INTERACTIONS}
-
-When a new methodology/algorithm to infer protein-protein interactions is developed, the outcome should be carefully benchmarked against a gold standard.
-Hence, we suggest to benchmark agains the KEGG pathway database (or other high quality pathway databases), and we provide suitable functions to perform this task.
-
-First of all, you need to provide as input a sorted interaction data frame (with the columns "proteinA", "proteinB", "score").
-
-<<benchmark1, eval=TRUE>>=
-data(interactions_example)
-
-interactions_benchmark = string_db$benchmark_ppi(interactions_example, pathwayType = "KEGG", 
-		max_homology_bitscore = 60, precision_window = 400, exclude_pathways = "blacklist")
-@
-
-The function benchmark\_ppi will return a data frame containing the sorted list of protein interactions mapped to the benchmark, and the precision computed in a sliding window of 400 interactions (that automatically expands/shrink at the beginning/end of the sorted interactions list).
-The precision is defined as the number of TP interactions (where the pair of proteins are both present together in at least one pathway) vs the total number of interactions in the window.
-When benchmarking PPI it is often important to remove the interactions composed by a pair of homologous protein. You can set a parameter in the function to automatically perform this task (max\_homology\_bitscore).
-The user may also want to remove several uninformative pathway from the gold standard (i.e. pathways that are too big or too generic ). The STRING team manually curates a black list of KEGG pathways that in our opinion should be removed in order to provide a reliable gold standard. With the "exclude\_pathways" parameter it is possible to automatically remove those pathways from the analysis (setting the parameter to "blacklist") or to specify a vector contaning the term identifiers of the pathways that the user wants to remove.
-
-It is finally very easy to plot the precision vs the number of sorted interactions:
-
-<<echo=false>>=
-options(SweaveHooks=list(fig=function()
-par(mar=c(4.1, 4.1, 4.1, 2.1))))
-@
-\setkeys{Gin}{width=0.8\linewidth}
-<<benchmark2, eval=TRUE, fig=TRUE>>=
-plot(interactions_benchmark$precision, ylim=c(0,1), type="l", xlim=c(0,700),
-	 xlab="interactions", ylab="precision")
-@
-
-We also provide a function to list the pathways to which the various TP interactions belong, together with some accompanying statistic:
-
-<<benchmark3, eval=TRUE>>=
-interactions_pathway_view = string_db$benchmark_ppi_pathway_view(interactions_benchmark, precision_threshold=0.2, pathwayType = "KEGG")
-head(interactions_pathway_view)
-@
-
-For each pathway for which a TP interaction is found in the sorted interaction list, we report its "total\_representation" (i.e. which percentages of interactions belong to that pathway), the "coverage" (i.e. number of interactions of the input list in the pathway / total number of possible interactions in the pathway) and the size of the pathway in number of proteins.
-
-\begin{Schunk}
-\begin{Sinput}
-                                          
-
 
 \end{Sinput}
 \end{Schunk}
@@ -420,13 +349,6 @@ For each pathway for which a TP interaction is found in the sorted interaction l
 
 Please cite:\\\\
 
-Franceschini, A et al. (2013). STRING v9.1: protein-protein interaction networks, with increased coverage and integration. In:'Nucleic Acids Res. 2013 Jan;41(Database issue):D808-15. doi: 10.1093/nar/gks1094. Epub 2012 Nov 29
-
-
-
-
-
-
-
+Szklarczyk, D et al. (2019). STRING v11: protein-protein association networks with increased coverage, supporting functional discovery in genome-wide experimental datasets.In:'Nucleic Acids Res. 2019 Jan;47(Database issue):D607-613.  doi: 10.1093/nar/gky1131.
 
 \end{document}
