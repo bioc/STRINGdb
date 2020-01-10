@@ -4,10 +4,10 @@
 get_homologs_besthits
 }
 \description{
-Returns the best blast hits x species of the given input identifiers.
+Returns the list of closest homologs (as measured by bitscore) of the given input identifiers in all STRING species or single target species.
 }
 \usage{
-\S4method{get_homologs_besthits}{STRINGdb}(string_ids, symbets = FALSE, target_species_id = NULL, bitscore_threshold=NULL)
+\S4method{get_homologs_besthits}{STRINGdb}(string_ids)
 }
 \arguments{
   \item{string_ids}{
@@ -15,12 +15,6 @@ a vector of STRING identifiers.
 }
   \item{target_species_id}{
  NCBI taxonomy identifier of the species to query for homologs (the species must be present in the STRING database)
-}
-  \item{bitscore_threshold}{
-threshold on the bitscore of the blast alignment.
-}
-  \item{symbets}{
-specify whether you want only symmetrical best hits
 }
 }
 \value{

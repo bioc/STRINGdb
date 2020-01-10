@@ -1,10 +1,10 @@
-citHeader("Please cite the paper below. Thankyou for using STRING.")
+citHeader("Thank you for using STRING. Please cite the paper below. ")
 
 citEntry(entry="article",
-        title = "STRING v9.1: protein-protein interaction networks, with increased coverage and integration.",
-        author = "Franceschini A et al.",
+        title = "STRING v11: protein-protein association networks with increased coverage, supporting functional discovery in genome-wide experimental datasets.",
+        author = "Szklarczyk D et al.",
         journal = "Nucleic Acids Research (Database issue)",
-        year = 2013,
-	volume = 41,
-        textVersion = "Franceschini, A (2013). STRING v9.1: protein-protein interaction networks, with increased coverage and integration. In:'Nucleic Acids Res. 2013 Jan;41(Database issue):D808-15. doi: 10.1093/nar/gks1094. Epub 2012 Nov 29'."
+        year = 2019,
+	    volume = 48,
+        textVersion = "Szklarczyk, Damian, et al. "STRING v11: protein–protein association networks with increased coverage, supporting functional discovery in genome-wide experimental datasets." Nucleic acids research 47.D1 (2018): D607-D613."
 )
