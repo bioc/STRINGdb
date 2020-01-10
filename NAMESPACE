@@ -4,7 +4,6 @@ export(
   downloadAbsentFile,
   downloadAbsentFileSTRING,
   multi_map_df,
-  ppi_enrichment,
   renameColDf
 )
 
