@@ -355,7 +355,7 @@ Author(s):
       #########################################
      
 
-      get_enrichment = function(string_ids){
+      get_enrichment = function(string_ids, category='All', methodMT=NULL, iea=NULL, minScore=NULL){
 
 '
 Description:
@@ -363,12 +363,27 @@ Description:
 
 Input parameters:
   "string_ids"    a vector of STRING identifiers.
+  "category" enrichment term category (All, Process, Component, Function, Keyword, KEGG, RCTM, Pfam, SMART, InterPro), default:ALL 
 
 Author(s):
    Andrea Franceschini
 '
 
-         urlStr <- "https://string-db.org/api/tsv-no-header/enrichment?" 
+         if (!(is.null(methodMT))) {
+             warning("methodMT parameter is depecated. Only FDR correction is available.")
+         }
+
+         if (!(is.null(iea))) {
+             warning("iea parameter is deprecated.")
+         }
+
+         if (!(is.null(minScore))) {
+             warning("minScore parameter is deprecated.")
+         }
+
+
+         urlStr <- "https://string-db.org/api/tsv/enrichment?" 
+
 
          identifiers = ""
 
@@ -394,16 +409,21 @@ Author(s):
 
          ann = read.table(text=tempDfv, sep="\t", stringsAsFactors=FALSE, quote="", fill=TRUE, header=TRUE)
 
-         #ann = renameColDf(ann, "V1", "category")
-         #ann = renameColDf(ann, "V2", "term_id")
-         #ann = renameColDf(ann, "V3", "number_of_genes")
-         #ann = renameColDf(ann, "V4", "number_of_genes_in_background")
-         #ann = renameColDf(ann, "V5", "species")
-         #ann = renameColDf(ann, "V6", "STRING_ids")
-         #ann = renameColDf(ann, "V7", "preferred_names")
-         #ann = renameColDf(ann, "V8", "pvalue")
-         #ann = renameColDf(ann, "V9", "fdr")
-         #ann = renameColDf(ann, "V10", "description")
+         # ann = renameColDf(ann, "V1", "category")
+         # ann = renameColDf(ann, "V2", "term_id")
+         # ann = renameColDf(ann, "V3", "number_of_genes")
+         # ann = renameColDf(ann, "V4", "number_of_genes_in_background")
+         # ann = renameColDf(ann, "V5", "species")
+         # ann = renameColDf(ann, "V6", "STRING_ids")
+         # ann = renameColDf(ann, "V7", "preferred_names")
+         # ann = renameColDf(ann, "V8", "pvalue")
+         # ann = renameColDf(ann, "V9", "fdr")
+         # ann = renameColDf(ann, "V10", "description")
+
+         if ( (category !=  'All')  && (!is.null(category))) {
+             print(category)
+             ann = subset(ann, category=="Process")
+         }
 
          return(ann)
 
