@@ -1,11 +1,5 @@
 
 
-## TODO: 1. Remove ppi enrichment 
-##       2. Check if all the calls to STRING are HTTPS
-##       3. Check if each call to STRING has caller_identity assigned
-##       4. Responses that are lists should be converted into lists
-##       5. implement background to enrichment queries
-
 setOldClass("igraph")
 
 STRINGdb <- setRefClass("STRINGdb",
@@ -175,18 +169,18 @@ Author(s):
           ## TODO: DS: Why we are running it like that twice?
 
           get_aliases(takeFirst=FALSE)
-##           get_aliases(takeFirst=TRUE)
-##           load()
-##       },
-##       
-## 
-## 
-##       #########################################
-##       ## get_proteins
-##       #########################################
-##  
-## 
-##       get_proteins = function(){
+           get_aliases(takeFirst=TRUE)
+           load()
+       },
+       
+ 
+ 
+       #########################################
+       ## get_proteins
+       #########################################
+  
+ 
+       get_proteins = function(){
 
 '
 Description:
