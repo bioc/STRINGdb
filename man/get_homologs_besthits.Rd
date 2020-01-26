@@ -7,7 +7,7 @@ get_homologs_besthits
 Returns the list of closest homologs (as measured by bitscore) of the given input identifiers in all STRING species or single target species.
 }
 \usage{
-\S4method{get_homologs_besthits}{STRINGdb}(string_ids)
+\S4method{get_homologs_besthits}{STRINGdb}(string_ids, target_species_ids=NULL)
 }
 \arguments{
   \item{string_ids}{

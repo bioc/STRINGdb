@@ -7,7 +7,7 @@ get_paralogs
 Returns the list of paralogs of the given input in their species.
 }
 \usage{
-\S4method{get_homologs_besthits}{STRINGdb}(string_ids)
+\S4method{get_paralogs}{STRINGdb}(string_ids)
 }
 \arguments{
   \item{string_ids}{
