@@ -6,5 +6,5 @@ citEntry(entry="article",
         journal = "Nucleic Acids Research (Database issue)",
         year = 2019,
         volume = 48,
-        textVersion = "Szklarczyk, Damian, et al. "STRING v11: protein-protein association networks with increased coverage, supporting functional discovery in genome-wide experimental datasets." Nucleic acids research 47.D1 (2018): D607-D613."
+        textVersion = "Szklarczyk, Damian, et al. 'STRING v11: protein-protein association networks with increased coverage, supporting functional discovery in genome-wide experimental datasets.' Nucleic acids research 47.D1 (2018): D607-D613."
 )
