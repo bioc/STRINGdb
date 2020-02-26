@@ -17,7 +17,8 @@ STRINGdb <- setRefClass("STRINGdb",
       input_directory="character",
       backgroundV = "vector",
       score_threshold = "numeric",
-      pathways_benchmark_blackList="data.frame"
+      pathways_benchmark_blackList="data.frame",
+      stable_url = "character"
     ),
 
     methods = list(
@@ -106,8 +107,10 @@ Author(s):
               score_threshold <<- 400
           }
           
+          
+
           server_version = read.table(url("https://string-db.org/api/tsv-no-header/version"), colClasses = "character")$V1
-          stable_url = read.table(url("https://string-db.org/api/tsv-no-header/version"), colClasses = "character")$V2
+          # stable_url = read.table(url("https://string-db.org/api/tsv-no-header/version"), colClasses = "character")$V2
           
           valid_versions = server_version ## for now we can only use the current version
           
@@ -119,6 +122,7 @@ Author(s):
           } else {
 
             version_dotted = paste(version, ".0", sep="")
+
             if(! (version %in% valid_versions || version_dotted %in% valid_versions)) {
               
               cat("ERROR: Currently STRINGdb only supports the most recent version of STRING: ", server_version)
@@ -128,6 +132,9 @@ Author(s):
           }
           if (version_dotted %in% valid_versions) version <<- version_dotted
 
+
+          version_hyphenated = gsub("\\.", "-", version)
+          stable_url <<- paste("https://version-", version_hyphenated, ".string-db.org", sep="")          
 
           if(input_directory=="" || is.null(input_directory) || length(input_directory)==0) input_directory<<-tempdir()
           if(input_directory=="" || is.null(input_directory) || length(score_threshold)==0 || score_threshold<1) score_threshold <<- 1
@@ -376,7 +383,7 @@ Author(s):
          }
 
 
-         urlStr <- "https://string-db.org/api/tsv/enrichment?" 
+         urlStr <- paste(stable_url, "/api/tsv/enrichment?", sep="") 
 
 
          identifiers = ""
@@ -505,7 +512,7 @@ Author(s):
 
           if (is.null(required_score)) required_score = score_threshold
 
-          urlStr <- "https://string-db.org/api/tsv-no-header/ppi_enrichment" 
+          urlStr <- paste(stable_url, "/api/tsv-no-header/ppi_enrichment", sep="")
 
           identifiers = ""
 
@@ -569,7 +576,7 @@ Author(s):
         if(is.null(required_score) ) required_score = score_threshold
         string_ids = unique(string_ids)
         string_ids = string_ids[!is.na(string_ids)]
-        urlStr = paste("https://string-db.org/api/image/network")
+        urlStr = paste(stable_url, "/api/image/network", sep="")
         identifiers=""
         for(id in string_ids ){ identifiers = paste(identifiers, id, sep="%0d")}
         params = list(required_score=required_score, required_score=required_score, network_flavor=network_flavor, identifiers=identifiers, species=species, caller_identity='STRINGdb-package')
@@ -646,7 +653,7 @@ Author(s):
           if(!is.null(logo_imgF)) postFormParams = c(postFormParams, list(logo_img=fileUpload(logo_imgF)))
           if(!is.null(legend_imgF)) postFormParams = c(postFormParams, list(legend_img=fileUpload(legend_imgF)))
         
-          postRs = postFormSmart(paste("https://string-db.org/cgi/webservices/post_payload.pl", sep=""),  .params = postFormParams)
+          postRs = postFormSmart(paste(stable_url, "/cgi/webservices/post_payload.pl", sep=""),  .params = postFormParams)
           
           return(postRs)
     },
@@ -703,7 +710,7 @@ Author(s):
           stop()
         }
 
-        urlStr = paste("https://string-db.org/api/tsv-no-header/homology", sep="")
+        urlStr = paste(stable_url, "/api/tsv-no-header/homology", sep="")
         identifiers=""
         for(id in string_ids ){
           identifiers = paste(identifiers, id, "%0D", sep="")
@@ -743,7 +750,7 @@ Author(s):
           stop()
         }
 
-        urlStr = paste("https://string-db.org/api/tsv-no-header/homology_best", sep="")
+        urlStr = paste(stable_url, "/api/tsv-no-header/homology_best", sep="")
         identifiers=""
         for(id in string_ids ){
           identifiers = paste(identifiers, id, "%0D", sep="")
@@ -877,7 +884,7 @@ Author(s):
         string_ids = unique(string_ids)
         string_ids = string_ids[!is.na(string_ids)]
 
-        urlStr = paste("https://string-db.org/api/tsv-no-header/functional_annotation")
+        urlStr = paste(stable_url, "/api/tsv-no-header/functional_annotation", sep="")
         identifiers=""
         for(id in string_ids ){ identifiers = paste(identifiers, id, sep="%0d")}
         params = list(identifiers=identifiers, species=species, caller_identity='STRINGdb-package')
