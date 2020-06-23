@@ -806,7 +806,16 @@ Author(s):
    Andrea Franceschini
 '
         if(is.null(graph)) load()
-        return(V(graph)[neighbors(graph, string_ids)]$name)
+
+        vp <- intersect(string_ids, V(graph)$name) 
+
+        ns <- c()
+
+        for (vertex in vp) {
+            ns <- append(ns, unique(V(graph)[neighbors(graph, vertex)]$name))
+            
+        }
+        return(ns)
       },
       
       
