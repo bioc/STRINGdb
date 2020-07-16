@@ -403,7 +403,7 @@ Author(s):
                background = paste(background, id, "%0d", sep="")
              }
  
-             params = list(species=species, identifiers=identifiers, background_string_identifier=background)
+             params = list(species=species, identifiers=identifiers, background_string_identifiers=background)
          }
  
          tempDfv =postFormSmart(urlStr, .params=params)
@@ -531,8 +531,7 @@ Author(s):
              for(id in backgroundV) {
                background = paste(background, id, "%0d", sep="")
              }
- 
-             params = list(species=species, identifiers=identifiers, background_string_identifier=background, required_score=required_score)
+             params = list(species=species, identifiers=identifiers, background_string_identifiers=background, required_score=required_score)
          }
  
 
