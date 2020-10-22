@@ -338,6 +338,9 @@ Author(s):
 '
         
         if(is.null(graph)) load()
+
+        string_ids = unique(string_ids)
+        string_ids = string_ids[!is.na(string_ids)]
         
         if(algorithm=="fastgreedy") fgreedy<-fastgreedy.community(simplify(get_subnetwork(string_ids)),merges=TRUE, modularity=TRUE)
         if(algorithm=="walktrap") fgreedy<-walktrap.community(get_subnetwork(string_ids),merges=TRUE, modularity=TRUE)
@@ -385,6 +388,9 @@ Author(s):
 
          urlStr <- paste(stable_url, "/api/tsv/enrichment?", sep="") 
 
+
+         string_ids = unique(string_ids)
+         string_ids = string_ids[!is.na(string_ids)]
 
          identifiers = ""
 
@@ -482,6 +488,8 @@ Input parameters:
 Author(s):
    Andrea Franceschini
 '
+        string_ids = unique(string_ids)
+        string_ids = string_ids[!is.na(string_ids)]
 
         enrichment = ppi_enrichment(string_ids, required_score)
         summaryText = paste("proteins: ", length(string_ids), '\n', 
@@ -513,6 +521,9 @@ Author(s):
           if (is.null(required_score)) required_score = score_threshold
 
           urlStr <- paste(stable_url, "/api/tsv-no-header/ppi_enrichment", sep="")
+
+          string_ids = unique(string_ids)
+          string_ids = string_ids[!is.na(string_ids)]
 
           identifiers = ""
 
@@ -573,8 +584,10 @@ Author(s):
         }
 
         if(is.null(required_score) ) required_score = score_threshold
+
         string_ids = unique(string_ids)
         string_ids = string_ids[!is.na(string_ids)]
+
         urlStr = paste(stable_url, "/api/image/network", sep="")
         identifiers=""
         for(id in string_ids ){ identifiers = paste(identifiers, id, sep="%0d")}
@@ -703,6 +716,10 @@ Author(s):
    Andrea Franceschini
 
 '
+
+        string_ids = unique(string_ids)
+        string_ids = string_ids[!is.na(string_ids)]
+
         
         if(length(string_ids) > 2000) {
           cat("ERROR: We support a maximum of 2000 STRING identifiers per call. Please reduce the size of the input and try again. \t")
@@ -743,6 +760,10 @@ Author(s):
    Andrea Franceschini
 
 '
+
+        string_ids = unique(string_ids)
+        string_ids = string_ids[!is.na(string_ids)]
+
         
         if(length(string_ids) > 2000) {
           cat("ERROR: We support a maximum of 2000 STRING identifiers per call. Please reduce the size of the input and try again. \t")
@@ -884,13 +905,14 @@ Author(s):
    Damian Szklarczyk
 '
 
+
+        string_ids = unique(string_ids)
+        string_ids = string_ids[!is.na(string_ids)]
+
         if(length(string_ids) > 2000) {
           cat("ERROR: We do not support lists with more than 2000 genes.\nPlease reduce the size of your input and rerun the analysis. \t")
           stop()
         }
-
-        string_ids = unique(string_ids)
-        string_ids = string_ids[!is.na(string_ids)]
 
         urlStr = paste(stable_url, "/api/tsv-no-header/functional_annotation", sep="")
         identifiers=""
