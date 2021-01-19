@@ -427,9 +427,12 @@ Author(s):
          # ann = renameColDf(ann, "V9", "fdr")
          # ann = renameColDf(ann, "V10", "description")
 
-         if ( (category !=  'All')  && (!is.null(category))) {
-             print(category)
-             ann = subset(ann, category=="Process")
+         requestedCategory = category
+
+         if ( (requestedCategory !=  'All')  && (!is.null(requestedCategory))) {
+
+             ann = subset(ann, category==requestedCategory)
+
          }
 
          return(ann)
