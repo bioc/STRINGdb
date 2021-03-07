@@ -445,7 +445,7 @@ Author(s):
  
       ## DS: We have removed get_link functionality
 
-      plot_network = function(string_ids, payload_id=NULL, required_score=NULL, add_link=TRUE, add_summary=TRUE) {
+      plot_network = function(string_ids, payload_id=NULL, required_score=NULL, add_link=TRUE, network_flavor='evidence', add_summary=TRUE) {
 
 '
 Description:
@@ -464,7 +464,7 @@ Author(s):
 '
         
         if(is.null(required_score) ) required_score = score_threshold
-        img = get_png(string_ids, payload_id=payload_id, required_score=required_score)
+        img = get_png(string_ids, payload_id=payload_id, required_score=required_score, network_flavor=network_flavor)
         if(!is.null(img)){
           plot(1:(dim(img)[2]), type='n', xaxt='n', yaxt='n', xlab="", ylab="", ylim=c(1,dim(img)[1]), xlim=c(1,(dim(img)[2])), asp = 1 )
           if(add_summary) mtext(get_summary(string_ids, required_score), cex = 0.7)
