@@ -1,7 +1,7 @@
 Package: STRINGdb
 Type: Package
 Title: STRINGdb (Search Tool for the Retrieval of Interacting proteins database)
-Version: 2.4.0
+Version: 2.5.0
 Date: 2020-01-10
 Author: Andrea Franceschini <andrea.franceschini@isb-sib.ch>
 Maintainer: Damian Szklarczyk <damian.szklarczyk@imls.uzh.ch>
