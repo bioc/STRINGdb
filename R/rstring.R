@@ -18,7 +18,9 @@ STRINGdb <- setRefClass("STRINGdb",
       backgroundV = "vector",
       score_threshold = "numeric",
       pathways_benchmark_blackList="data.frame",
-      stable_url = "character"
+      stable_url = "character",
+      file_version = "character"
+
     ),
 
     methods = list(
@@ -90,8 +92,6 @@ Description:
 Author(s):
    Andrea Franceschini
 '
- 
-          ## TODO: allow different versions (v11 will be the lowest one available) 
 
           callSuper(...)
 
@@ -107,35 +107,43 @@ Author(s):
               score_threshold <<- 400
           }
           
-          
-
-          server_version = read.table(url("https://string-db.org/api/tsv-no-header/version"), colClasses = "character")$V1
-          # stable_url = read.table(url("https://string-db.org/api/tsv-no-header/version"), colClasses = "character")$V2
-          
-          valid_versions = server_version ## for now we can only use the current version
+          curr_version_table = read.table(url("https://string-pythongamma.org/api/tsv-no-header/version"), colClasses = "character")
+          curr_version = curr_version_table$V1[1]
           
           if(length(version)==0) {
             
-            cat("WARNING: You didn't specify a version of the STRING database to use. Hence we will use STRING", server_version,"\n")
-            version <<- server_version
-            
+            cat("WARNING: You didn't specify a version of the STRING database to use. Hence we will use STRING ", curr_version, "\n")
+            version <<- curr_version
+           
+
           } else {
 
-            version_dotted = paste(version, ".0", sep="")
+            if (!(grepl("\\.", version))) {
+                version <<- paste(version, ".0", sep="")
+            }
 
-            if(! (version %in% valid_versions || version_dotted %in% valid_versions)) {
-              
-              cat("ERROR: Currently STRINGdb only supports the most recent version of STRING: ", server_version)
-              stop()
-              
-            } 
           }
-          if (version_dotted %in% valid_versions) version <<- version_dotted
 
+          version_available_table = read.table(url("https://string-pythongamma.org/api/tsv-no-header/available_api_versions"), colClasses = "character")
+ 
+          valid_versions = version_available_table$V1
 
-          version_hyphenated = gsub("\\.", "-", version)
-          stable_url <<- paste("https://version-", version_hyphenated, ".string-db.org", sep="")          
+          if(! (version %in% valid_versions)) {
+            
+            cat("ERROR: specified version", version ," is not valid. \n")
+            cat("Available versions:\n")
+            print(valid_versions)
+            stop()
+            
+          } 
 
+          file_version <<- version
+          if (file_version == "11.0b") {
+              file_version <<- "11.0"
+          }
+
+          stable_url <<- subset(version_available_table, V1==version)$V2
+         
           if(input_directory=="" || is.null(input_directory) || length(input_directory)==0) input_directory<<-tempdir()
           if(input_directory=="" || is.null(input_directory) || length(score_threshold)==0 || score_threshold<1) score_threshold <<- 1
 
@@ -198,12 +206,30 @@ Author(s):
    Andrea Franceschini
 '
         
+
+
         if(nrow(proteins)==0){
-          temp = downloadAbsentFile(paste("https://stringdb-static.org/download/protein.info.v", version, "/", species, ".protein.info.v", version, ".txt.gz", sep=""), oD=input_directory)
-          proteinsDf <- read.table(temp, sep = "\t", header=TRUE, stringsAsFactors=FALSE, fill = TRUE, quote="")
-          proteinsDf2 = subset(proteinsDf, select=c("protein_external_id",  "preferred_name", "protein_size", "annotation"))
+
+          temp = downloadAbsentFile(paste("https://stringdb-static.org/download/protein.info.v", file_version, "/", species, ".protein.info.v", file_version, ".txt.gz", sep=""), oD=input_directory)
+
+          if (version %in% c("11.0", "11.0b")) {
+
+              proteinsDf <- read.table(temp, sep = "\t", header=TRUE, stringsAsFactors=FALSE, fill = TRUE, quote="")
+              proteinsDf2 = subset(proteinsDf, select=c("protein_external_id",  "preferred_name", "protein_size", "annotation"))
+
+          } else {
+
+             proteinsDf <- read.table(temp, sep = "\t", skip=1, header=FALSE, stringsAsFactors=FALSE, fill = TRUE, quote="")
+
+             colnames(proteinsDf) <- c("protein_external_id",  "preferred_name", "protein_size", "annotation")
+             proteinsDf2 = subset(proteinsDf, select=c("protein_external_id",  "preferred_name", "protein_size", "annotation"))
+
+          }
+
           proteins <<- proteinsDf2
         }
+
+
         return(proteins)
       },
  
@@ -229,7 +255,7 @@ Author(s):
           ## TODO: DS: Test take first
           ## or better: implement it nicer
           
-          temp = downloadAbsentFile(paste("https://stringdb-static.org/download/protein.aliases.v", version, "/", species, ".protein.aliases.v", version, ".txt.gz", sep=""), oD=input_directory)        
+          temp = downloadAbsentFile(paste("https://stringdb-static.org/download/protein.aliases.v", file_version, "/", species, ".protein.aliases.v", file_version, ".txt.gz", sep=""), oD=input_directory)        
           if(!takeFirst){ 
             aliases_type <<- "all"
           } else {
@@ -285,7 +311,7 @@ Author(s):
           library(graph)
           if(is.null(graph)) load()
          
-          url <- paste("https://stringdb-static.org/download/protein.links.v", version, "/", species, ".protein.links.v", version, ".txt.gz", sep="")
+          url <- paste("https://stringdb-static.org/download/protein.links.v", file_version, "/", species, ".protein.links.v", file_version, ".txt.gz", sep="")
           temp = downloadAbsentFile(url, oD=input_directory)
          
           PPI <- read.table(temp, sep = " ", header=TRUE, stringsAsFactors=FALSE, fill = TRUE)
@@ -443,9 +469,7 @@ Author(s):
       ## plot_network
       #########################################
  
-      ## DS: We have removed get_link functionality
-
-      plot_network = function(string_ids, payload_id=NULL, required_score=NULL, add_link=TRUE, network_flavor='evidence', add_summary=TRUE) {
+      plot_network = function(string_ids, payload_id=NULL, required_score=NULL, add_link=FALSE, network_flavor='evidence', add_summary=TRUE) {
 
 '
 Description:
@@ -463,12 +487,17 @@ Author(s):
    Andrea Franceschini
 '
         
+        if (version %in% c("11.0")) {
+            print("Parameter add_link not available in version 11.0 (please use 11.0b or later)")
+            add_link = FALSE
+        }
+
         if(is.null(required_score) ) required_score = score_threshold
         img = get_png(string_ids, payload_id=payload_id, required_score=required_score, network_flavor=network_flavor)
         if(!is.null(img)){
           plot(1:(dim(img)[2]), type='n', xaxt='n', yaxt='n', xlab="", ylab="", ylim=c(1,dim(img)[1]), xlim=c(1,(dim(img)[2])), asp = 1 )
           if(add_summary) mtext(get_summary(string_ids, required_score), cex = 0.7)
-          #if(add_link) mtext(get_link(string_ids, payload_id=payload_id, required_score=required_score), cex = 0.7, side=1)
+          if(add_link) mtext(get_link(string_ids, payload_id=payload_id, required_score=required_score), cex = 0.7, side=1)
           rasterImage(img, 1, 1, (dim(img)[2]), dim(img)[1])
         } 
       },
@@ -681,7 +710,7 @@ Author(s):
 
      get_homology_graph = function(min_homology_bitscore=60){
 
-         temp = downloadAbsentFile(paste("https://stringdb-static.org/download/protein.homology.v", version, "/", species, ".protein.homology.v", version, ".txt.gz", sep=""), oD=input_directory)
+         temp = downloadAbsentFile(paste("https://stringdb-static.org/download/protein.homology.v", file_version, "/", species, ".protein.homology.v", file_version, ".txt.gz", sep=""), oD=input_directory)
 
          PPI <- read.table(temp, sep = "\t", header=FALSE, skip=1, stringsAsFactors=FALSE, fill = TRUE)
           
@@ -763,6 +792,11 @@ Author(s):
    Andrea Franceschini
 
 '
+
+        if (!(version %in% c("11.0", "11.0b"))) {
+            print("Method available only in versions 11.0 and 11.0b")
+            stop()
+        }
 
         string_ids = unique(string_ids)
         string_ids = string_ids[!is.na(string_ids)]
@@ -960,7 +994,7 @@ Author(s):
 '
         
 
-        url <- paste("https://stringdb-static.org/download/protein.links.v", version, "/", species, ".protein.links.v", version, ".txt.gz", sep="")
+        url <- paste("https://stringdb-static.org/download/protein.links.v", file_version, "/", species, ".protein.links.v", file_version, ".txt.gz", sep="")
         temp = downloadAbsentFile(url, oD=input_directory)
         PPI <- read.table(temp, sep = " ", header=TRUE, stringsAsFactors=FALSE, fill = TRUE)
         
@@ -1342,38 +1376,45 @@ get_homologs = function(string_ids, target_species_id, bitscore_threshold=NULL){
 },
  
 
-get_link = function(string_ids, required_score=NULL, network_flavor="evidence", payload_id = NULL){
-    .Deprecated('Contact developers to request functionality')
+get_link = function(string_ids, required_score=NULL, network_flavor="evidence", payload_id = NULL) {
 
-##'
-##Description:
-##  Returns a short link to the network page of our STRING website that shows the protein interactions between the given identifiers.
-##
-##Input parameters:
-##  "string_ids"        a vector of STRING identifiers.
-##  "required_score"    minimum STRING combined score of the interactions 
-##                        (if left NULL we get the combined score of the object, which is 400 by default)
-##  "network_flavor"    specify the flavor of the network ("evidence", "confidence" or "actions".  default "evidence")
-##
-##Author(s):
-##   Andrea Franceschini
-##'
-##        if(length(string_ids) > 400) {
-##          cat("ERROR: We do not support lists with more than 400 genes.\nPlease reduce the size of your input and rerun the analysis. \t")
-##          stop()
-##        }
-##        if(is.null(required_score) ) required_score = score_threshold
-##        string_ids = unique(string_ids)
-##        urlStr = paste("http://string-db.org/version_",version,"/newstring_cgi/link_to.pl", sep="" )
-##        #urlStr = paste("http://130.60.240.90:8380/newstring_cgi/link_to.pl", sep="" )
-##        identifiers=""
-##        for(id in string_ids ){   identifiers = paste(identifiers, id, "%0D", sep="")}
-##        params=list(required_score=required_score, limit=0, network_flavor=network_flavor, identifiers=identifiers)
-##        if(!is.null(payload_id)) params["internal_payload_id"] = payload_id
-##        tempDfv=postFormSmart(urlStr, .params=params)
-##        df=read.table(text=tempDfv, stringsAsFactors=FALSE, fill = TRUE)
-##        return(df$V1)
-##
+'
+Description:
+  Returns a short link to the network page of our STRING website that shows the protein interactions between the given identifiers.
+
+Input parameters:
+  "string_ids"        a vector of STRING identifiers.
+  "required_score"    minimum STRING combined score of the interactions 
+                        (if left NULL we get the combined score of the object, which is 400 by default)
+  "network_flavor"    specify the flavor of the network ("evidence", "confidence" or "actions".  default "evidence")
+
+Author(s):
+   Andrea Franceschini
+'
+
+
+        if (version %in% c("11.0")) {
+            print("Method get_link not available in version 11.0 (please use 11.0b or later)")
+            add_link = FALSE
+        }
+
+
+        if(length(string_ids) > 400) {
+          cat("ERROR: We do not support lists with more than 400 genes.\nPlease reduce the size of your input and rerun the analysis. \t")
+          stop()
+        }
+        if(is.null(required_score) ) required_score = score_threshold
+        string_ids = unique(string_ids)
+        urlStr = paste(stable_url, "/api/tsv-no-header/get_link", sep="" )
+        identifiers=""
+
+        for(id in string_ids ){ identifiers = paste(identifiers, id, "%0D", sep="")}
+
+        params=list(required_score=required_score, limit=0, network_flavor=network_flavor, identifiers=identifiers, species=species)
+        if(!is.null(payload_id)) params["internal_payload_id"] = payload_id
+        tempDfv=postFormSmart(urlStr, .params=params)
+        df=read.table(text=tempDfv, stringsAsFactors=FALSE, fill = TRUE)
+        return(df$V1)
 
 },
 
