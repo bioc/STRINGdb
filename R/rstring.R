@@ -107,7 +107,7 @@ Author(s):
               score_threshold <<- 400
           }
           
-          curr_version_table = read.table(url("https://string-pythongamma.org/api/tsv-no-header/version"), colClasses = "character")
+          curr_version_table = read.table(url("https://string-db.org/api/tsv-no-header/version"), colClasses = "character")
           curr_version = curr_version_table$V1[1]
           
           if(length(version)==0) {
@@ -124,7 +124,7 @@ Author(s):
 
           }
 
-          version_available_table = read.table(url("https://string-pythongamma.org/api/tsv-no-header/available_api_versions"), colClasses = "character")
+          version_available_table = read.table(url("https://string-db.org/api/tsv-no-header/available_api_versions"), colClasses = "character")
  
           valid_versions = version_available_table$V1
 
