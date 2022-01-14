@@ -19,6 +19,7 @@ STRINGdb <- setRefClass("STRINGdb",
       score_threshold = "numeric",
       pathways_benchmark_blackList="data.frame",
       stable_url = "character",
+      protocol = "character",
       file_version = "character"
 
     ),
@@ -107,7 +108,18 @@ Author(s):
               score_threshold <<- 400
           }
           
-          curr_version_table = read.table(url("https://string-db.org/api/tsv-no-header/version"), colClasses = "character")
+          if(length(protocol)==0) {
+              protocol <<- "https";
+          } else {
+
+              if(!(tolower(protocol)=="https" || tolower(protocol)=="http")) {
+                  cat("WARNING: Only 'http' and 'https' protocols are valid. Setting to protocol to 'https'.\n")
+                  protocol <<- "https";
+              }
+
+          }
+
+          curr_version_table = read.table(url(paste(protocol,"://string-db.org/api/tsv-no-header/version", sep="")), colClasses = "character")
           curr_version = curr_version_table$V1[1]
           
           if(length(version)==0) {
@@ -124,7 +136,7 @@ Author(s):
 
           }
 
-          version_available_table = read.table(url("https://string-db.org/api/tsv-no-header/available_api_versions"), colClasses = "character")
+          version_available_table = read.table(url(paste(protocol, "://string-db.org/api/tsv-no-header/available_api_versions", sep="")), colClasses = "character")
  
           valid_versions = version_available_table$V1
 
@@ -210,7 +222,7 @@ Author(s):
 
         if(nrow(proteins)==0){
 
-          temp = downloadAbsentFile(paste("https://stringdb-static.org/download/protein.info.v", file_version, "/", species, ".protein.info.v", file_version, ".txt.gz", sep=""), oD=input_directory)
+          temp = downloadAbsentFile(paste(protocol, "://stringdb-static.org/download/protein.info.v", file_version, "/", species, ".protein.info.v", file_version, ".txt.gz", sep=""), oD=input_directory)
 
           if (version %in% c("11.0", "11.0b")) {
 
@@ -255,7 +267,7 @@ Author(s):
           ## TODO: DS: Test take first
           ## or better: implement it nicer
           
-          temp = downloadAbsentFile(paste("https://stringdb-static.org/download/protein.aliases.v", file_version, "/", species, ".protein.aliases.v", file_version, ".txt.gz", sep=""), oD=input_directory)        
+          temp = downloadAbsentFile(paste(protocol, "://stringdb-static.org/download/protein.aliases.v", file_version, "/", species, ".protein.aliases.v", file_version, ".txt.gz", sep=""), oD=input_directory)        
           if(!takeFirst){ 
             aliases_type <<- "all"
           } else {
@@ -311,7 +323,7 @@ Author(s):
           library(graph)
           if(is.null(graph)) load()
          
-          url <- paste("https://stringdb-static.org/download/protein.links.v", file_version, "/", species, ".protein.links.v", file_version, ".txt.gz", sep="")
+          url <- paste(protocol, "://stringdb-static.org/download/protein.links.v", file_version, "/", species, ".protein.links.v", file_version, ".txt.gz", sep="")
           temp = downloadAbsentFile(url, oD=input_directory)
          
           PPI <- read.table(temp, sep = " ", header=TRUE, stringsAsFactors=FALSE, fill = TRUE)
@@ -710,7 +722,7 @@ Author(s):
 
      get_homology_graph = function(min_homology_bitscore=60){
 
-         temp = downloadAbsentFile(paste("https://stringdb-static.org/download/protein.homology.v", file_version, "/", species, ".protein.homology.v", file_version, ".txt.gz", sep=""), oD=input_directory)
+         temp = downloadAbsentFile(paste(protocol, "://stringdb-static.org/download/protein.homology.v", file_version, "/", species, ".protein.homology.v", file_version, ".txt.gz", sep=""), oD=input_directory)
 
          PPI <- read.table(temp, sep = "\t", header=FALSE, skip=1, stringsAsFactors=FALSE, fill = TRUE)
           
@@ -994,7 +1006,7 @@ Author(s):
 '
         
 
-        url <- paste("https://stringdb-static.org/download/protein.links.v", file_version, "/", species, ".protein.links.v", file_version, ".txt.gz", sep="")
+        url <- paste(protocol, "://stringdb-static.org/download/protein.links.v", file_version, "/", species, ".protein.links.v", file_version, ".txt.gz", sep="")
         temp = downloadAbsentFile(url, oD=input_directory)
         PPI <- read.table(temp, sep = " ", header=TRUE, stringsAsFactors=FALSE, fill = TRUE)
         
