@@ -349,6 +349,6 @@ string_db$get_homologs_besthits(c(tp53, atm), target_species_id=10090, bitscore_
 
 Please cite:\\\\
 
-Szklarczyk, D et al. (2019). STRING v11: protein-protein association networks with increased coverage, supporting functional discovery in genome-wide experimental datasets.In:'Nucleic Acids Res. 2019 Jan;47(Database issue):D607-613.  doi: 10.1093/nar/gky1131.
+Szklarczyk D, Gable AL, Nastou KC, Lyon D, Kirsch R, Pyysalo S, Doncheva NT, Legeay M, Fang T, Bork P, Jensen LJ, von Mering C. 'The STRING database in 2021: customizable protein–protein networks, and functional characterization of user-uploaded gene/measurement sets.' Nucleic Acids Res. 2021 Jan 8;49(D1):D605-12
 
 \end{document}
