@@ -1,10 +1,10 @@
 citHeader("Thank you for using STRING. Please cite the paper below. ")
 
 citEntry(entry="article",
-        title = "STRING v11: protein-protein association networks with increased coverage, supporting functional discovery in genome-wide experimental datasets.",
-        author = "Szklarczyk D. et al.",
+        title = "The STRING database in 2021: customizable protein-protein networks, and functional characterization of user-uploaded gene/measurement sets.",
+        author = "Szklarczyk D, Gable AL, Nastou KC, Lyon D, Kirsch R, Pyysalo S, Doncheva NT, Legeay M, Fang T, Bork P, Jensen LJ, von Mering C.",
         journal = "Nucleic Acids Research (Database issue)",
-        year = 2019,
-        volume = 48,
-        textVersion = "Szklarczyk, Damian, et al. 'STRING v11: protein-protein association networks with increased coverage, supporting functional discovery in genome-wide experimental datasets.' Nucleic acids research 47.D1 (2018): D607-D613."
+        year = 2021,
+        volume = 49,
+        textVersion = "Szklarczyk D, Gable AL, Nastou KC, Lyon D, Kirsch R, Pyysalo S, Doncheva NT, Legeay M, Fang T, Bork P, Jensen LJ, von Mering C. 'The STRING database in 2021: customizable protein-protein networks, and functional characterization of user-uploaded gene/measurement sets.' Nucleic Acids Res. 2021 Jan 8;49(D1):D605-12"
 )
