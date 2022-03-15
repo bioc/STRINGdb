@@ -2,8 +2,8 @@ citHeader("Thank you for using STRING. Please cite the paper below. ")
 
 citEntry(entry="article",
         title = "The STRING database in 2021: customizable protein-protein networks, and functional characterization of user-uploaded gene/measurement sets.",
-        author = personList(  as.person("Szklarczyk Damian"), 
-                              as.person("Gable L Gable "),
+        author = personList(  as.person("Damian Szklarczyk"), 
+                              as.person("Annika L Gable "),
                               as.person("Katerina C Nastou"),
                               as.person("David Lyon"),
                               as.person("Rebecca Kirsch"),
