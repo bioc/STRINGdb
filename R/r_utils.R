@@ -151,7 +151,6 @@ merge.with.order <- function(x,y, ..., sort = T)
 }
 
 
-
 # mapping function (add the possibility to map using more than one column)
 multi_map_df <- function(dfToMap, dfMap, strColsFrom, strColFromDfMap, strColToDfMap, caseSensitive=FALSE){
   
