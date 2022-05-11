@@ -283,18 +283,17 @@ Author(s):
           aliasDf <- read.table(temp, skip=1, sep = "\t", header=FALSE, quote="", stringsAsFactors=FALSE, fill = TRUE)
           colnames(aliasDf) <- c("STRING_id", "alias", "sources")
           aliasDf = subset(aliasDf, select=c("STRING_id", "alias"))
-          
+
           pr1=data.frame(STRING_id=proteins$protein_external_id, alias=proteins$preferred_name, stringsAsFactors=FALSE)        
           pr2=data.frame(STRING_id=proteins$protein_external_id, alias=proteins$protein_external_id, stringsAsFactors=FALSE)
-          pr3=data.frame(STRING_id=proteins$protein_external_id, alias=unlist(strsplit(proteins$protein_external_id, "\\."))[seq(from=2, to=2*nrow(proteins), by=2)], stringsAsFactors=FALSE)
-          
+          #pr3=data.frame(STRING_id=proteins$protein_external_id, alias=unlist(strsplit(proteins$protein_external_id, "\\."))[seq(from=2, to=2*nrow(proteins), by=2)], stringsAsFactors=FALSE)
+
           #if(takeFirst){aliasDf = subset(aliasDf, !(alias %in% proteins$preferred_name) & !(alias %in% proteins$protein_external_id) )  }
           if(takeFirst){aliasDf = subset(aliasDf, !(toupper(iconv(alias, "WINDOWS-1252", "UTF-8")) %in% toupper(proteins$preferred_name)) & 
-                                           !(toupper(iconv(alias, "WINDOWS-1252", "UTF-8")) %in% toupper(proteins$protein_external_id))  &
-                                            !(toupper(iconv(alias, "WINDOWS-1252", "UTF-8")) %in% toupper(unlist(strsplit(proteins$protein_external_id, "\\."))[seq(from=2, to=2*nrow(proteins), by=2)])) )
+                                           !(toupper(iconv(alias, "WINDOWS-1252", "UTF-8")) %in% toupper(proteins$protein_external_id)) )
           }
           
-          aliasDf2=rbind(pr1,pr2,pr3, aliasDf)
+          aliasDf2=rbind(pr1,pr2,aliasDf)
           aliases_tf <<- aliasDf2
 
           return(aliasDf2)
