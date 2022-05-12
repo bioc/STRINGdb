@@ -13,7 +13,8 @@ STRINGdb <- setRefClass("STRINGdb",
       aliases_type="character",
       #spe    ciesList="data.frame",
       species="numeric",
-      version="character",    
+      version="character",
+      network_type = "character",
       input_directory="character",
       backgroundV = "vector",
       score_threshold = "numeric",
@@ -118,6 +119,18 @@ Author(s):
               }
 
           }
+
+          if(length(network_type)==0) {
+              network_type <<- "full";
+          } else {
+              if(!(tolower(network_type)=="full" || tolower(network_type)=="physical")) {
+                  cat("WARNING: Only 'full' and 'physical' network types are valid. Setting to the network type to 'full' STRING network.\n")
+                  network_type <<- "full";
+              }
+
+          }
+
+
 
           curr_version_table = read.table(url(paste(protocol,"://string-db.org/api/tsv-no-header/version", sep="")), colClasses = "character")
           curr_version = curr_version_table$V1[1]
@@ -322,7 +335,12 @@ Author(s):
           library(graph)
           if(is.null(graph)) load()
          
-          url <- paste(protocol, "://stringdb-static.org/download/protein.links.v", file_version, "/", species, ".protein.links.v", file_version, ".txt.gz", sep="")
+          network_type_param = ""
+          if (tolower(network_type) == 'physical') {
+              network_type_param = 'physical.'
+          }
+
+          url <- paste(protocol, "://stringdb-static.org/download/protein.", network_type_param, "links.v", file_version, "/", species, ".protein.", network_type_param, "links.v", file_version, ".txt.gz", sep="")
           temp = downloadAbsentFile(url, oD=input_directory)
          
           PPI <- read.table(temp, sep = " ", header=TRUE, stringsAsFactors=FALSE, fill = TRUE)
@@ -615,7 +633,7 @@ Input parameters:
   "string_ids"        a vector of STRING identifiers.
   "required_score"    minimum STRING combined score of the interactions 
                         (if left NULL we get the combined score of the object, which is 400 by default)
-  "network_flavor"    specify the flavor of the network ("evidence", "confidence" or "actions".  default "evidence")
+  "network_flavor"    specify the flavor of the network ("evidence", "confidence".  default "evidence")
   "file"              file where to save the image (must have .png extension)
 
 Author(s):
@@ -628,13 +646,19 @@ Author(s):
 
         if(is.null(required_score) ) required_score = score_threshold
 
+        network_type_param = "functional"
+        if (tolower(network_type) == 'physical') {
+            network_type_param = 'physical'
+        }
+
         string_ids = unique(string_ids)
         string_ids = string_ids[!is.na(string_ids)]
 
         urlStr = paste(stable_url, "/api/image/network", sep="")
         identifiers=""
+
         for(id in string_ids ){ identifiers = paste(identifiers, id, sep="%0d")}
-        params = list(required_score=required_score, required_score=required_score, network_flavor=network_flavor, identifiers=identifiers, species=species, caller_identity='STRINGdb-package')
+        params = list(required_score=required_score, required_score=required_score, network_flavor=network_flavor, network_type=network_type_param, identifiers=identifiers, species=species, caller_identity='STRINGdb-package')
 
         if(!is.null(payload_id)) params["internal_payload_id"]= payload_id
         img <- readPNG(postFormSmart(  urlStr, .params=params) )
@@ -1005,7 +1029,13 @@ Author(s):
 '
         
 
-        url <- paste(protocol, "://stringdb-static.org/download/protein.links.v", file_version, "/", species, ".protein.links.v", file_version, ".txt.gz", sep="")
+        network_type_param = ""
+        if (tolower(network_type) == 'physical') {
+            network_type_param = 'physical.'
+        }
+
+
+        url <- paste(protocol, "://stringdb-static.org/download/protein.", network_type_param, "links.v", file_version, "/", species, ".protein.", network_type_param, "links.v", file_version, ".txt.gz", sep="")
         temp = downloadAbsentFile(url, oD=input_directory)
         PPI <- read.table(temp, sep = " ", header=TRUE, stringsAsFactors=FALSE, fill = TRUE)
         

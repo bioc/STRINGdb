@@ -49,8 +49,8 @@ Hence, if your species is not Human (i.e. our default species), you can find it 
 
 <<initialization>>=
 library(STRINGdb)
-string_db <- STRINGdb$new( version="11", species=9606, 
-                           score_threshold=200, input_directory="")
+string_db <- STRINGdb$new( version="11.5", species=9606, 
+                           score_threshold=200, network_type="functional" input_directory="")
 @
 
 \begin{Schunk}
@@ -61,6 +61,7 @@ string_db <- STRINGdb$new( version="11", species=9606,
 
 As it has been shown in the above commands, you start instantiating the STRINGdb reference class.
 In the constructor of the class you can also define the STRING version to be used and a threshold for the combined scores of the interactions, such that any interaction below that threshold is not loaded in the object (by default the score threshold is set to 400).\\
+You can also specify the network type "functional" for full functional STRING network or "physical" for physical subnetwork, which link only the proteins which share a physical complex.\\ 
 Besides, if you specify a local directory to the parameter input-directory, the database files will be downloaded into this directory and most of the methods can be used off-line. Otherwise, the database files will be saved and cached in a temporary directory that will be cleaned automatically when the R session is closed.\\\\
 
 For a better understanding of the package two other commands can be useful:
