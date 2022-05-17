@@ -6,7 +6,7 @@ test_get_ppi_enrichment <- function() {
   hits = example$STRING_id[1:20]
   string_db$set_background(hits) 
   ppi_enrichment = string_db$get_ppi_enrichment( hits )
-  checkTrue( ppi_enrichment$enrichment == 1)
+  checkTrue( ppi_enrichment$enrichment >= 0.2 )
 
 }
 
