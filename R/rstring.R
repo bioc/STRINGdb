@@ -354,7 +354,7 @@ Author(s):
             PPIselected <- PPIselected[PPIselected$protein2 %in% backgroundV,]
           }
            
-          nel_graph <- ftM2graphNEL(cbind(PPIselected$protein1, PPIselected$protein2), W=PPIselected$combined_score)
+          nel_graph <- ftM2graphNEL(cbind(PPIselected$protein1, PPIselected$protein2), W=c(PPIselected$combined_score))
           nel_graph2 <- ugraph(nel_graph)
 
           return(nel_graph2)
@@ -363,7 +363,7 @@ Author(s):
 
         } else {
 
-          cat("ERROR: In order to run this function you must install the \"graph\" package from CRAN. \n Please install the package and run this function again.\n")
+            cat("ERROR: In order to run this function you must install the \"graph\" package from Bioconductor. \n Please install the package and run this function again.\n")        
 
         }
       },
@@ -723,6 +723,10 @@ Author(s):
 
 '
 
+          if (length(stringIds) == 0) {
+              stop("ERROR: stringIds vector must include at least 1 element!")
+          }
+
           postFormParams = list(identifiers=paste(stringIds, collapse=" ") )
         
           if(!is.null(colors)) postFormParams = c(postFormParams, list(colors=paste(colors, collapse=" ")))
@@ -1072,7 +1076,7 @@ Author(s):
 '
         
         temp_df = data.frame(proteins=protein_aliases)
-        temp_df_mapped = map(temp_df, "proteins", removeUnmappedRows=TRUE, quiet=TRUE)
+        temp_df_mapped = map(temp_df, "proteins", takeFirst=TRUE, removeUnmappedRows=TRUE, quiet=TRUE)
         return(temp_df_mapped$STRING_id)
         
       },
