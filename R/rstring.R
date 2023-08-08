@@ -235,7 +235,7 @@ Author(s):
 
         if(nrow(proteins)==0){
 
-          temp = downloadAbsentFile(paste(protocol, "://stringdb-static.org/download/protein.info.v", file_version, "/", species, ".protein.info.v", file_version, ".txt.gz", sep=""), oD=input_directory)
+          temp = downloadAbsentFile(paste(protocol, "://stringdb-downloads.org/download/protein.info.v", file_version, "/", species, ".protein.info.v", file_version, ".txt.gz", sep=""), oD=input_directory)
 
           if (version %in% c("11.0", "11.0b")) {
 
@@ -280,7 +280,7 @@ Author(s):
           ## TODO: DS: Test take first
           ## or better: implement it nicer
           
-          temp = downloadAbsentFile(paste(protocol, "://stringdb-static.org/download/protein.aliases.v", file_version, "/", species, ".protein.aliases.v", file_version, ".txt.gz", sep=""), oD=input_directory)        
+          temp = downloadAbsentFile(paste(protocol, "://stringdb-downloads.org/download/protein.aliases.v", file_version, "/", species, ".protein.aliases.v", file_version, ".txt.gz", sep=""), oD=input_directory)        
           if(!takeFirst){ 
             aliases_type <<- "all"
           } else {
@@ -340,7 +340,7 @@ Author(s):
               network_type_param = 'physical.'
           }
 
-          url <- paste(protocol, "://stringdb-static.org/download/protein.", network_type_param, "links.v", file_version, "/", species, ".protein.", network_type_param, "links.v", file_version, ".txt.gz", sep="")
+          url <- paste(protocol, "://stringdb-downloads.org/download/protein.", network_type_param, "links.v", file_version, "/", species, ".protein.", network_type_param, "links.v", file_version, ".txt.gz", sep="")
           temp = downloadAbsentFile(url, oD=input_directory)
          
           PPI <- read.table(temp, sep = " ", header=TRUE, stringsAsFactors=FALSE, fill = TRUE)
@@ -749,7 +749,7 @@ Author(s):
 
      get_homology_graph = function(min_homology_bitscore=60){
 
-         temp = downloadAbsentFile(paste(protocol, "://stringdb-static.org/download/protein.homology.v", file_version, "/", species, ".protein.homology.v", file_version, ".txt.gz", sep=""), oD=input_directory)
+         temp = downloadAbsentFile(paste(protocol, "://stringdb-downloads.org/download/protein.homology.v", file_version, "/", species, ".protein.homology.v", file_version, ".txt.gz", sep=""), oD=input_directory)
 
          PPI <- read.table(temp, sep = "\t", header=FALSE, skip=1, stringsAsFactors=FALSE, fill = TRUE)
           
@@ -1039,7 +1039,7 @@ Author(s):
         }
 
 
-        url <- paste(protocol, "://stringdb-static.org/download/protein.", network_type_param, "links.v", file_version, "/", species, ".protein.", network_type_param, "links.v", file_version, ".txt.gz", sep="")
+        url <- paste(protocol, "://stringdb-downloads.org/download/protein.", network_type_param, "links.v", file_version, "/", species, ".protein.", network_type_param, "links.v", file_version, ".txt.gz", sep="")
         temp = downloadAbsentFile(url, oD=input_directory)
         PPI <- read.table(temp, sep = " ", header=TRUE, stringsAsFactors=FALSE, fill = TRUE)
         
