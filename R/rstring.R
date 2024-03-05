@@ -168,7 +168,12 @@ Author(s):
           }
 
           stable_url <<- subset(version_available_table, V1==version)$V2
-         
+
+          if (tolower(protocol) == 'http') {
+              stable_url <<- gsub("https:", "http:", stable_url)
+          }         
+
+
           if(input_directory=="" || is.null(input_directory) || length(input_directory)==0) input_directory<<-tempdir()
           if(input_directory=="" || is.null(input_directory) || length(score_threshold)==0 || score_threshold<1) score_threshold <<- 1
 
@@ -467,7 +472,7 @@ Author(s):
              params = list(species=species, identifiers=identifiers, background_string_identifiers=background)
          }
  
-         tempDfv =postFormSmart(urlStr, .params=params)
+         tempDfv = postFormSmart(urlStr, .params=params)
 
          ann = read.table(text=tempDfv, sep="\t", stringsAsFactors=FALSE, quote="", fill=TRUE, header=TRUE)
 
@@ -661,12 +666,14 @@ Author(s):
         params = list(required_score=required_score, required_score=required_score, network_flavor=network_flavor, network_type=network_type_param, identifiers=identifiers, species=species, caller_identity='STRINGdb-package')
 
         if(!is.null(payload_id)) params["internal_payload_id"]= payload_id
-        img <- readPNG(postFormSmart(  urlStr, .params=params) )
+
+        img <- readPNG(postFormSmart(  urlStr, .params=params, .ctype='raw') )
         if(!is.null(file))  writePNG(img,  file)
-        
+
         return(img)
       },
  
+
 
       #########################################
       ## get_graph
@@ -831,11 +838,6 @@ Author(s):
    Andrea Franceschini
 
 '
-
-        if (!(version %in% c("11.0", "11.0b"))) {
-            print("Method available only in versions 11.0 and 11.0b")
-            stop()
-        }
 
         string_ids = unique(string_ids)
         string_ids = string_ids[!is.na(string_ids)]
