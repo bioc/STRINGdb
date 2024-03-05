@@ -49,7 +49,7 @@ Hence, if your species is not Human (i.e. our default species), you can find it 
 
 <<initialization>>=
 library(STRINGdb)
-string_db <- STRINGdb$new( version="11.5", species=9606, 
+string_db <- STRINGdb$new( version="12.0", species=9606, 
                            score_threshold=200, network_type="full", input_directory="")
 @
 
@@ -284,7 +284,7 @@ It takes in input a vector of protein aliases and returns a vector with the STRI
 
 
 Using the following method, you can see the proteins that interact with one or more of your proteins:
-<<neighbors, eval=FALSE>>=
+<<neighbors, eval=TRUE>>=
 string_db$get_neighbors( c(tp53, atm) )
 @
 
@@ -310,7 +310,7 @@ string_db$get_interactions( c(tp53, atm) )
 
 STRING provides a way to get homologous proteins: in our database we store ALL-AGAINST-ALL alignments within all 5090 organisms. You can retrive all of the paralogs of the protein using "get\_paralogs" method.  
 
-<<paralogs, eval=FALSE>>=
+<<paralogs, eval=TRUE>>=
 # Get all homologs of TP53 in human.
 string_db$get_paralogs(tp53)
 @
@@ -322,7 +322,7 @@ string_db$get_paralogs(tp53)
 
 STRING also stores best hits (as measured by bitscore) between the proteins from different species. "get\_homologs\_besthits" lets you retrieve these homologs.
 
-<<Closest homologs from other species, eval=FALSE>>=
+<<Closest homologs from other species, eval=TRUE>>=
 # get the best hits of the following protein in all the STRING species
 string_db$get_homologs_besthits(tp53)
 @
@@ -334,7 +334,7 @@ string_db$get_homologs_besthits(tp53)
 
 ... or you can specify the species of interest (i.e. all the blast hits): 
 
-<<homologs_besthits in target species, eval=FALSE>>=
+<<homologs_besthits in target species, eval=TRUE>>=
 # get the homologs of the following two proteins in the mouse (i.e. species_id=10090)
 string_db$get_homologs_besthits(c(tp53, atm), target_species_id=10090, bitscore_threshold=60)
 @
@@ -350,6 +350,7 @@ string_db$get_homologs_besthits(c(tp53, atm), target_species_id=10090, bitscore_
 
 Please cite:\\\\
 
-Szklarczyk D, Gable AL, Nastou KC, Lyon D, Kirsch R, Pyysalo S, Doncheva NT, Legeay M, Fang T, Bork P, Jensen LJ, von Mering C. 'The STRING database in 2021: customizable protein-protein networks, and functional characterization of user-uploaded gene/measurement sets.' Nucleic Acids Res. 2021 Jan 8;49(D1):D605-12
+ 
+Szklarczyk D, Kirsch R, Koutrouli M, Nastou K, Mehryary F, Hachilif R, Annika GL, Fang T, Doncheva NT, Pyysalo S, Bork P, Jensen LJ, von Mering C. 'The STRING database in 2023: protein–protein association networks and functional enrichment analyses for any sequenced genome of interest.' Nucleic Acids Res. 2023 Jan 6;51(D1):D638-646
 
 \end{document}
