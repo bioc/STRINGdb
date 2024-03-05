@@ -13,7 +13,7 @@ exportClasses(
 
 import(
        RColorBrewer,
-       RCurl,
+       httr,
        gplots,
        hash,
        igraph,
