@@ -336,7 +336,7 @@ string_db$get_homologs_besthits(tp53)
 
 <<homologs_besthits in target species, eval=TRUE>>=
 # get the homologs of the following two proteins in the mouse (i.e. species_id=10090)
-string_db$get_homologs_besthits(c(tp53, atm), target_species_id=10090, bitscore_threshold=60)
+string_db$get_homologs_besthits(c(tp53, atm), target_species_id=10090)
 @
 
 \begin{Schunk}
