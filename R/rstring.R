@@ -14,6 +14,7 @@ STRINGdb <- setRefClass("STRINGdb",
       #spe    ciesList="data.frame",
       species="numeric",
       version="character",
+      link_data="character",
       network_type = "character",
       input_directory="character",
       backgroundV = "vector",
@@ -130,6 +131,15 @@ Author(s):
 
           }
 
+          if(length(link_data)==0) {
+              link_data <<- "combined_only";
+          } else {
+  
+              if (!(tolower(link_data)=="combined_only" || tolower(link_data)=="full" || tolower(link_data) == "detailed")) {
+                      cat("WARNING: Only 'combined_only', 'detailed' and 'full' link data types are valid. Setting to 'combined_only'.\n")
+                      link_data <<- "combined_only";
+              }
+          }
 
 
           curr_version_table = read.table(url(paste(protocol,"://string-db.org/api/tsv-no-header/version", sep="")), colClasses = "character")
@@ -1040,8 +1050,16 @@ Author(s):
             network_type_param = 'physical.'
         }
 
+        link_data_param = "links.v";
 
-        url <- paste(protocol, "://stringdb-downloads.org/download/protein.", network_type_param, "links.v", file_version, "/", species, ".protein.", network_type_param, "links.v", file_version, ".txt.gz", sep="")
+        if (tolower(link_data) == "detailed") {
+            link_data_param = "links.detailed.v";
+        } else if (tolower(link_data) == "full") {
+            link_data_param = "links.full.v";
+        }
+
+        url <- paste(protocol, "://stringdb-downloads.org/download/protein.", network_type_param, link_data_param, file_version, "/", species, ".protein.", network_type_param, link_data_param, file_version, ".txt.gz", sep="")
+
         temp = downloadAbsentFile(url, oD=input_directory)
         PPI <- read.table(temp, sep = " ", header=TRUE, stringsAsFactors=FALSE, fill = TRUE)
         
