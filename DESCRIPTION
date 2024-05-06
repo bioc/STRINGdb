@@ -1,11 +1,7 @@
 Package: STRINGdb
 Type: Package
 Title: STRINGdb - Protein-Protein Interaction Networks and Functional Enrichment Analysis
-<<<<<<< HEAD
-Version: 2.17.0
-=======
-Version: 2.16.1
->>>>>>> 7262f4e (Updated vignette with the new link_data parameter.)
+Version: 2.17.1
 Date: 2023-03-05
 Author: Andrea Franceschini <andrea.franceschini@isb-sib.ch>
 Maintainer: Damian Szklarczyk <damian.szklarczyk@imls.uzh.ch>
