@@ -39,7 +39,7 @@ In the STRINGdb R package we use the new ReferenceClasses of R (search for "Refe
 
 To begin, you should first know the NCBI taxonomy identifiers of the organism on which you have performed the experiment (e.g. 9606 for Human, 10090 for mouse). 
 If you don't know that, you can search the NCBI Taxonomy (http://www.ncbi.nlm.nih.gov/taxonomy)  or start looking at our species table (that you can also use to verify that your organism is represented in the STRING database). \\
-Hence, if your species is not Human (i.e. our default species), you can find it and their taxonomy identifiers on STRING webpage under the 'organisms' section (https://string-db.org/cgi/input?input_page_active_form=organisms) or download the full list in the download section of STRING website.
+Hence, if your species is not Human (i.e. our default species), you can find it and their taxonomy identifiers on STRING webpage under the 'organisms' section (https://string-db.org/cgi/input?input\_page\_active\_form=organisms) or download the full list in the download section of STRING website.
 
 \begin{Schunk}
 \begin{Sinput}
