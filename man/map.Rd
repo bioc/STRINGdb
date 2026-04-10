@@ -8,7 +8,7 @@ Maps the gene identifiers of the input dataframe to STRING identifiers.
 It returns the input dataframe with the "STRING_id" additional column.
 }
 \usage{
-\S4method{map}{STRINGdb}(my_data_frame, my_data_frame_id_col_names, takeFirst=TRUE, removeUnmappedRows=FALSE, quiet=FALSE)
+\S4method{map}{STRINGdb}(my_data_frame, my_data_frame_id_col_names, takeFirst=TRUE, removeUnmappedRows=FALSE, quiet=FALSE, usePreferredSources=TRUE)
 }
 \arguments{
   \item{my_data_frame}{
@@ -28,6 +28,9 @@ remove the rows that cannot be mapped to STRING
   \item{quiet}{
 Setting this variable to TRUE we can avoid printing the warning relative to the unmapped values.
 }
+  \item{usePreferredSources}{
+when \code{takeFirst=TRUE}, prioritize aliases using the preferred source order.
+}
 
 }
 \value{
@@ -36,5 +39,4 @@ Returns the dataframe that is given in input with the "STRING_id" additional col
 \author{
 Andrea Franceschini
 }
-
 
