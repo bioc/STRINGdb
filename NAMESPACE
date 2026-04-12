@@ -24,3 +24,5 @@ import(
 )
 
 importFrom(plotrix, color.scale)
+importFrom(stats, sd)
+importFrom(utils, download.file, read.table, tail)

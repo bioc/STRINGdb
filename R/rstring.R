@@ -810,7 +810,7 @@ Author(s):
         stop()
       }
 
-      urlStr <- paste(stable_url, "/api/tsv-no-header/homology_best", sep = "")
+      urlStr <- paste(stable_url, "/api/tsv/homology_best", sep = "")
       identifiers <- ""
       for (id in string_ids) {
         identifiers <- paste(identifiers, id, "%0D", sep = "")

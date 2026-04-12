@@ -1,6 +1,6 @@
 test_get_ppi_enrichment <- function() {
 
-  string_db <- STRINGdb$new( version="11.5", species=9606, score_threshold=400) 
+  string_db <- STRINGdb$new( version="12.0", species=9606, score_threshold=400)
   data(diff_exp_example1)
   example = string_db$map( diff_exp_example1, "gene", removeUnmappedRows = TRUE )  
   hits = example$STRING_id[1:20]
@@ -9,4 +9,3 @@ test_get_ppi_enrichment <- function() {
   checkTrue( ppi_enrichment$enrichment >= 0.2 )
 
 }
-
