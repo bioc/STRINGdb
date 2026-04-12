@@ -5,6 +5,7 @@ load
 }
 \description{
 Downloads and returns the STRING network (the network is set also in the graph variable of the STRING_db object).
+When possible, the download uses the threshold-specific streamed network file matching the current \code{score_threshold}.
 
   
 It makes use of the variables:
@@ -21,5 +22,4 @@ STRING network (i.e. an iGraph object.  For info look to http://igraph.sourcefor
 \author{
 Andrea Franceschini
 }
-
 

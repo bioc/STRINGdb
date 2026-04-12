@@ -37,7 +37,7 @@ Description:
   When the down or up-regulation is instead weak the intensity of the color gets weaker as well, accordingly.
 
 Author(s):
-   Andrea Franceschini
+   Damian Szklarczyk
 '
 
       screen_pval05_pos <- subset(screen, as.matrix(screen[logFcColStr])[, 1] > 0)
@@ -65,7 +65,7 @@ Input parameters:
       "screen"  a data frame having a "STRING_id" column
 
 Author(s):
-   Andrea Franceschini
+   Damian Szklarczyk
 '
 
       proteinsDf2 <- get_proteins()
@@ -594,22 +594,50 @@ Author(s):
     #########################################
 
 
-    get_png = function(string_ids, required_score = NULL, network_flavor = "evidence", file = NULL, payload_id = NULL) {
+    get_png = function(string_ids = NULL,
+                       required_score = NULL,
+                       network_flavor = "evidence",
+                       file = NULL,
+                       payload_id = NULL,
+                       output_format = "image",
+                       network_term_id = NULL,
+                       hide_node_labels = NULL,
+                       hide_disconnected_nodes = NULL,
+                       block_structure_pics_in_bubbles = NULL,
+                       flat_node_design = TRUE,
+                       center_node_labels = NULL,
+                       custom_label_font_size = NULL,
+                       caller_identity = "STRINGdb-package") {
       '
 Description:
-  Returns a png image of a STRING protein network with the given identifiers.
+  Returns a STRING protein network image with the given identifiers.
 
 Input parameters:
-  "string_ids"        a vector of STRING identifiers.
+  "string_ids"        a vector of STRING identifiers. Can be omitted when network_term_id is provided.
   "required_score"    minimum STRING combined score of the interactions
                         (if left NULL we get the combined score of the object, which is 400 by default)
-  "network_flavor"    specify the flavor of the network ("evidence", "confidence".  default "evidence")
-  "file"              file where to save the image (must have .png extension)
+  "network_flavor"    specify the flavor of the network ("evidence" or "confidence".  default "evidence")
+  "file"              file where to save the image
+  "output_format"     image format returned by STRING ("image", "highres_image" or "svg")
+  "network_term_id"   functional term identifier used by STRING instead of explicit protein identifiers
+  "hide_node_labels"  hides all protein names from the picture (TRUE/FALSE or 0/1, default FALSE)
+  "hide_disconnected_nodes"  hides all proteins that are not connected to any other protein in your network (TRUE/FALSE or 0/1, default FALSE)
+  "block_structure_pics_in_bubbles"   disables structure pictures inside the bubble (TRUE/FALSE or 0/1, default FALSE)
+  "flat_node_design"  disables 3D bubble design (TRUE/FALSE or 0/1, default TRUE)
+  "center_node_labels"  centers protein names on nodes (TRUE/FALSE or 0/1, default FALSE)
+  "custom_label_font_size"   changes the font size of node labels (from 5 to 50, default 12)
+  "caller_identity"   caller identifier sent to STRING
+  "payload_id"        identifier of payload data on the STRING server (see method post_payload for additional informations)
 
 Author(s):
    Andrea Franceschini
 '
-      if (length(string_ids) > 2000) {
+      if (is.null(network_term_id) && (is.null(string_ids) || length(string_ids) == 0)) {
+        cat("ERROR: Please provide either STRING identifiers or a network_term_id.\n")
+        stop()
+      }
+
+      if (!is.null(string_ids) && length(string_ids) > 2000) {
         cat("ERROR: We do not support lists with more than 2000 genes.\nPlease reduce the size of your input and rerun the analysis. \t")
         stop()
       }
@@ -621,21 +649,59 @@ Author(s):
         network_type_param <- "physical"
       }
 
-      string_ids <- unique(string_ids)
-      string_ids <- string_ids[!is.na(string_ids)]
-
-      urlStr <- paste(stable_url, "/api/image/network", sep = "")
-      identifiers <- ""
-
-      for (id in string_ids) {
-        identifiers <- paste(identifiers, id, sep = "%0d")
+      if (!(output_format %in% c("image", "highres_image", "svg"))) {
+        cat("ERROR: output_format should be one of: image, highres_image, svg.\n")
+        stop()
       }
-      params <- list(required_score = required_score, required_score = required_score, network_flavor = network_flavor, network_type = network_type_param, identifiers = identifiers, species = species, caller_identity = "STRINGdb-package")
+
+      if (!(network_flavor %in% c("evidence", "confidence"))) {
+        cat("ERROR: network_flavor should be either 'evidence' or 'confidence'.\n")
+        stop()
+      }
+
+      hide_node_labels <- normalize_api_flag(hide_node_labels, "hide_node_labels")
+      hide_disconnected_nodes <- normalize_api_flag(hide_disconnected_nodes, "hide_disconnected_nodes")
+      block_structure_pics_in_bubbles <- normalize_api_flag(block_structure_pics_in_bubbles, "block_structure_pics_in_bubbles")
+      flat_node_design <- normalize_api_flag(flat_node_design, "flat_node_design")
+      center_node_labels <- normalize_api_flag(center_node_labels, "center_node_labels")
+
+      if (!is.null(custom_label_font_size)) {
+        if (!(is.numeric(custom_label_font_size) && length(custom_label_font_size) == 1 && !is.na(custom_label_font_size) &&
+          custom_label_font_size >= 5 && custom_label_font_size <= 50)) {
+          cat("ERROR: custom_label_font_size should be a number between 5 and 50.\n")
+          stop()
+        }
+        custom_label_font_size <- as.integer(custom_label_font_size)
+      }
+
+      identifiers <- collapse_string_identifiers(string_ids)
+      urlStr <- paste(stable_url, "/api/", output_format, "/network", sep = "")
+      params <- list(
+        required_score = required_score,
+        network_flavor = network_flavor,
+        network_type = network_type_param,
+        identifiers = identifiers,
+        network_term_id = network_term_id,
+        species = species,
+        hide_node_labels = hide_node_labels,
+        hide_disconnected_nodes = hide_disconnected_nodes,
+        block_structure_pics_in_bubbles = block_structure_pics_in_bubbles,
+        flat_node_design = flat_node_design,
+        center_node_labels = center_node_labels,
+        custom_label_font_size = custom_label_font_size,
+        caller_identity = caller_identity
+      )
 
       if (!is.null(payload_id)) params["internal_payload_id"] <- payload_id
+      params <- drop_null_params(params)
 
-      img <- readPNG(postFormSmart(urlStr, .params = params, .ctype = "raw"))
-      if (!is.null(file)) writePNG(img, file)
+      if (output_format == "svg") {
+        img <- postFormSmart(urlStr, .params = params, .ctype = "text")
+        if (!is.null(file)) cat(img, file = file)
+      } else {
+        img <- readPNG(postFormSmart(urlStr, .params = params, .ctype = "raw"))
+        if (!is.null(file)) writePNG(img, file)
+      }
 
       return(img)
     },
@@ -1077,6 +1143,7 @@ Author(s):
       '
 Description:
   Downloads and returns the STRING network (the network is set also in the graph variable of the STRING_db object).
+  When possible, the download uses the threshold-specific streamed network file matching the current score_threshold.
 
 It makes use of the variables:
     "backgroundV"         vector containing STRING identifiers to be used as background
@@ -1101,7 +1168,12 @@ Author(s):
         link_data_param <- "links.full.v"
       }
 
-      url <- paste(protocol, "://stringdb-downloads.org/download/protein.", network_type_param, link_data_param, file_version, "/", species, ".protein.", network_type_param, link_data_param, file_version, ".txt.gz", sep = "")
+      min_score_suffix <- ""
+      if (length(score_threshold) != 0 && !is.null(score_threshold) && score_threshold >= 1) {
+        min_score_suffix <- paste(".min", as.integer(floor(score_threshold)), sep = "")
+      }
+
+      url <- paste(protocol, "://stringdb-downloads.org/download/stream/protein.", network_type_param, link_data_param, file_version, "/", species, ".protein.", network_type_param, link_data_param, file_version, min_score_suffix, ".txt.gz", sep = "")
 
       temp <- downloadAbsentFile(url, oD = input_directory)
       PPI <- read.table(temp, sep = " ", header = TRUE, stringsAsFactors = FALSE, fill = TRUE)
@@ -1468,16 +1540,35 @@ Author(s):
       ##        homology_graph <<- myg
       ##        return(myg)
     },
-    get_link = function(string_ids, required_score = NULL, network_flavor = "evidence", payload_id = NULL) {
+    get_link = function(string_ids = NULL,
+                        required_score = NULL,
+                        network_flavor = "evidence",
+                        payload_id = NULL,
+                        network_term_id = NULL,
+                        hide_node_labels = NULL,
+                        hide_disconnected_nodes = NULL,
+                        block_structure_pics_in_bubbles = NULL,
+                        flat_node_design = TRUE,
+                        center_node_labels = NULL,
+                        custom_label_font_size = NULL,
+                        caller_identity = "STRINGdb-package") {
       '
 Description:
   Returns a short link to the network page of our STRING website that shows the protein interactions between the given identifiers.
 
 Input parameters:
-  "string_ids"        a vector of STRING identifiers.
+  "string_ids"        a vector of STRING identifiers. Can be omitted when network_term_id is provided.
   "required_score"    minimum STRING combined score of the interactions
                         (if left NULL we get the combined score of the object, which is 400 by default)
-  "network_flavor"    specify the flavor of the network ("evidence", "confidence" or "actions".  default "evidence")
+  "network_flavor"    specify the flavor of the network ("evidence" or "confidence".  default "evidence")
+  "network_term_id"   functional term identifier used by STRING instead of explicit protein identifiers
+  "hide_node_labels"  hides all protein names from the picture (TRUE/FALSE or 0/1, default FALSE)
+  "hide_disconnected_nodes"  hides all proteins that are not connected to any other protein in your network (TRUE/FALSE or 0/1, default FALSE)
+  "block_structure_pics_in_bubbles"   disables structure pictures inside the bubble (TRUE/FALSE or 0/1, default FALSE)
+  "flat_node_design"  disables 3D bubble design (TRUE/FALSE or 0/1, default TRUE)
+  "center_node_labels"  centers protein names on nodes (TRUE/FALSE or 0/1, default FALSE)
+  "custom_label_font_size"   changes the font size of node labels (from 5 to 50, default 12)
+  "caller_identity"   caller identifier sent to STRING
 
 Author(s):
    Andrea Franceschini
@@ -1490,21 +1581,62 @@ Author(s):
       }
 
 
-      if (length(string_ids) > 400) {
+      if (is.null(network_term_id) && (is.null(string_ids) || length(string_ids) == 0)) {
+        cat("ERROR: Please provide either STRING identifiers or a network_term_id.\n")
+        stop()
+      }
+
+      if (!is.null(string_ids) && length(string_ids) > 400) {
         cat("ERROR: We do not support lists with more than 400 genes.\nPlease reduce the size of your input and rerun the analysis. \t")
         stop()
       }
       if (is.null(required_score)) required_score <- score_threshold
-      string_ids <- unique(string_ids)
       urlStr <- paste(stable_url, "/api/tsv-no-header/get_link", sep = "")
-      identifiers <- ""
+      identifiers <- collapse_string_identifiers(string_ids)
 
-      for (id in string_ids) {
-        identifiers <- paste(identifiers, id, "%0D", sep = "")
+      if (!(network_flavor %in% c("evidence", "confidence"))) {
+        cat("ERROR: network_flavor should be either 'evidence' or 'confidence'.\n")
+        stop()
       }
 
-      params <- list(required_score = required_score, limit = 0, network_flavor = network_flavor, identifiers = identifiers, species = species)
+      network_type_param <- "functional"
+      if (tolower(network_type) == "physical") {
+        network_type_param <- "physical"
+      }
+
+      hide_node_labels <- normalize_api_flag(hide_node_labels, "hide_node_labels")
+      hide_disconnected_nodes <- normalize_api_flag(hide_disconnected_nodes, "hide_disconnected_nodes")
+      block_structure_pics_in_bubbles <- normalize_api_flag(block_structure_pics_in_bubbles, "block_structure_pics_in_bubbles")
+      flat_node_design <- normalize_api_flag(flat_node_design, "flat_node_design")
+      center_node_labels <- normalize_api_flag(center_node_labels, "center_node_labels")
+
+      if (!is.null(custom_label_font_size)) {
+        if (!(is.numeric(custom_label_font_size) && length(custom_label_font_size) == 1 && !is.na(custom_label_font_size) &&
+          custom_label_font_size >= 5 && custom_label_font_size <= 50)) {
+          cat("ERROR: custom_label_font_size should be a number between 5 and 50.\n")
+          stop()
+        }
+        custom_label_font_size <- as.integer(custom_label_font_size)
+      }
+
+      params <- list(
+        required_score = required_score,
+        limit = 0,
+        network_flavor = network_flavor,
+        network_type = network_type_param,
+        identifiers = identifiers,
+        network_term_id = network_term_id,
+        species = species,
+        hide_node_labels = hide_node_labels,
+        hide_disconnected_nodes = hide_disconnected_nodes,
+        block_structure_pics_in_bubbles = block_structure_pics_in_bubbles,
+        flat_node_design = flat_node_design,
+        center_node_labels = center_node_labels,
+        custom_label_font_size = custom_label_font_size,
+        caller_identity = caller_identity
+      )
       if (!is.null(payload_id)) params["internal_payload_id"] <- payload_id
+      params <- drop_null_params(params)
       tempDfv <- postFormSmart(urlStr, .params = params)
       df <- read.table(text = tempDfv, stringsAsFactors = FALSE, fill = TRUE)
       return(df$V1)

@@ -98,6 +98,44 @@ format_interaction_dataframe <- function(interactions_df, proteins_df, from_col 
 }
 
 
+collapse_string_identifiers <- function(string_ids) {
+  if (is.null(string_ids) || length(string_ids) == 0) {
+    return(NULL)
+  }
+
+  string_ids <- unique(string_ids)
+  string_ids <- string_ids[!is.na(string_ids)]
+
+  if (length(string_ids) == 0) {
+    return(NULL)
+  }
+
+  return(paste(string_ids, collapse = "%0d"))
+}
+
+
+drop_null_params <- function(params) {
+  return(params[!vapply(params, is.null, logical(1))])
+}
+
+
+normalize_api_flag <- function(value, param_name) {
+  if (is.null(value)) {
+    return(NULL)
+  }
+
+  if (is.logical(value) && length(value) == 1 && !is.na(value)) {
+    return(as.integer(value))
+  }
+
+  if (is.numeric(value) && length(value) == 1 && !is.na(value) && value %in% c(0, 1)) {
+    return(as.integer(value))
+  }
+
+  stop(paste("ERROR:", param_name, "should be TRUE/FALSE or 0/1.", sep = " "))
+}
+
+
 # delete column in data frame
 delColDf <- function(df, colName) {
   if (colName %in% names(df)) {

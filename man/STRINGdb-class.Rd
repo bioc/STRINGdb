@@ -61,10 +61,10 @@ showClass("STRINGdb")
     \item{\code{get_ppi_enrichment_full(string_ids, sliceWindow, edgeWindow, windowExtendedReferenceThreshold, growingWindowLimit)}:}{ ~~ }
     \item{\code{get_ppi_enrichment(string_ids)}:}{ ~~ }
     \item{\code{get_proteins()}:}{ ~~ }
-    \item{\code{get_png(string_ids, required_score, network_flavor, file, payload_id)}:}{ ~~ }
+    \item{\code{get_png(string_ids, required_score, network_flavor, file, payload_id, output_format, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity)}:}{ ~~ }
     \item{\code{get_neighbors(string_ids)}:}{ ~~ }
     \item{\code{get_interaction_partners(string_ids, required_score, limit)}:}{ ~~ }
-    \item{\code{get_link(string_ids, required_score, network_flavor, payload_id)}:}{ ~~ }
+    \item{\code{get_link(string_ids, required_score, network_flavor, payload_id, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity)}:}{ ~~ }
     \item{\code{get_interactions(string_ids)}:}{ ~~ }
     \item{\code{get_homologs_besthits(string_ids, symbets, target_species_id, bitscore_threshold)}:}{ ~~ }
     \item{\code{get_homologs(string_ids, target_species_id, bitscore_threshold)}:}{ ~~ }
