@@ -841,11 +841,20 @@ Input parameters:
     "string_ids"    a vector of STRING identifiers.
 
 Author(s):
-   Andrea Franceschini
+   Damian Szklarczyk
 
 '
       if (is.null(graph)) load()
-      return(get.data.frame(get_subnetwork(string_ids), c("edges")))
+
+      edge_hits <- igraph::as_data_frame(get_subnetwork(string_ids), what = "edges")
+      if (nrow(edge_hits) == 0) {
+        return(data.frame())
+      }
+
+      edge_hits <- unique(edge_hits)
+
+      proteins <<- get_proteins()
+      return(format_interaction_dataframe(edge_hits, proteins_df = proteins, from_col = "from", to_col = "to"))
     },
 
 
@@ -875,6 +884,92 @@ Author(s):
         ns <- append(ns, unique(V(graph)[neighbors(graph, vertex)]$name))
       }
       return(ns)
+    },
+
+
+    #########################################
+    ## get_interaction_partners
+    #########################################
+
+
+    get_interaction_partners = function(string_ids, required_score = NULL, limit = NULL) {
+      '
+Description:
+  Returns the interaction partners of the input proteins using the locally loaded STRING graph.
+  The returned data frame preserves the edge attributes available for the current link_data setting.
+
+Input parameters:
+  "string_ids"    a vector of STRING identifiers.
+  "required_score" optional minimum combined score for returned partners. This value cannot be below
+                   the score_threshold used to load the local graph.
+  "limit"         optional maximum number of partner rows returned per query protein.
+
+Author(s):
+   Damian Szklarczyk
+'
+      if (is.null(graph)) load()
+
+      string_ids <- unique(string_ids)
+      string_ids <- string_ids[!is.na(string_ids)]
+
+      if (!is.null(required_score)) {
+        if (length(required_score) != 1 || is.na(required_score)) {
+          stop("ERROR: required_score must be a single non-NA numeric value")
+        }
+        if (required_score < score_threshold) {
+          stop(paste("ERROR: required_score (", required_score, ") is below the score_threshold used to load the local graph (", score_threshold, ").\nPlease reinitialize/load STRINGdb with a lower score_threshold if you want to retrieve lower-scoring interactions.", sep = ""))
+        }
+      }
+
+      edges <- igraph::as_data_frame(graph, what = "edges")
+      if (nrow(edges) == 0) {
+        return(data.frame())
+      }
+
+      result_list <- list()
+      result_index <- 1
+
+      for (query_id in string_ids) {
+        edge_hits <- edges[edges$from == query_id | edges$to == query_id, , drop = FALSE]
+        if (nrow(edge_hits) == 0) {
+          next
+        }
+
+        edge_hits$partner <- ifelse(edge_hits$from == query_id, edge_hits$to, edge_hits$from)
+        edge_hits <- edge_hits[edge_hits$partner != query_id, , drop = FALSE]
+        if (nrow(edge_hits) == 0) {
+          next
+        }
+        edge_hits <- unique(edge_hits)
+
+        if (!is.null(required_score)) {
+          edge_hits <- edge_hits[edge_hits$combined_score >= required_score, , drop = FALSE]
+          if (nrow(edge_hits) == 0) {
+            next
+          }
+        }
+
+        if (!is.null(limit)) {
+          edge_hits <- edge_hits[order(-edge_hits$combined_score, edge_hits$partner), , drop = FALSE]
+          edge_hits <- edge_hits[seq_len(min(limit, nrow(edge_hits))), , drop = FALSE]
+        }
+
+        edge_hits$from <- query_id
+        edge_hits$to <- edge_hits$partner
+        edge_hits$partner <- NULL
+        trailing_cols <- setdiff(names(edge_hits), c("from", "to"))
+        edge_hits <- edge_hits[, c("from", "to", trailing_cols), drop = FALSE]
+
+        result_list[[result_index]] <- edge_hits
+        result_index <- result_index + 1
+      }
+
+      if (length(result_list) == 0) {
+        return(data.frame())
+      }
+
+      proteins <<- get_proteins()
+      return(format_interaction_dataframe(do.call(rbind, result_list), proteins_df = proteins, from_col = "from", to_col = "to"))
     },
 
 

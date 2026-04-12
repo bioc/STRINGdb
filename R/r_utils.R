@@ -88,6 +88,16 @@ prioritize_aliases_by_source <- function(aliasDf) {
 }
 
 
+format_interaction_dataframe <- function(interactions_df, proteins_df, from_col = "from", to_col = "to") {
+  interactions_df$from_name <- proteins_df$preferred_name[match(interactions_df[, from_col], proteins_df$protein_external_id)]
+  interactions_df$to_name <- proteins_df$preferred_name[match(interactions_df[, to_col], proteins_df$protein_external_id)]
+
+  leading_cols <- c(from_col, to_col, "combined_score", "from_name", "to_name")
+  trailing_cols <- setdiff(names(interactions_df), leading_cols)
+  return(interactions_df[, c(leading_cols, trailing_cols), drop = FALSE])
+}
+
+
 # delete column in data frame
 delColDf <- function(df, colName) {
   if (colName %in% names(df)) {

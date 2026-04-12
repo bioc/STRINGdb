@@ -63,6 +63,7 @@ showClass("STRINGdb")
     \item{\code{get_proteins()}:}{ ~~ }
     \item{\code{get_png(string_ids, required_score, network_flavor, file, payload_id)}:}{ ~~ }
     \item{\code{get_neighbors(string_ids)}:}{ ~~ }
+    \item{\code{get_interaction_partners(string_ids, required_score, limit)}:}{ ~~ }
     \item{\code{get_link(string_ids, required_score, network_flavor, payload_id)}:}{ ~~ }
     \item{\code{get_interactions(string_ids)}:}{ ~~ }
     \item{\code{get_homologs_besthits(string_ids, symbets, target_species_id, bitscore_threshold)}:}{ ~~ }
