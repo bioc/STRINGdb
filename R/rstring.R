@@ -471,6 +471,133 @@ Author(s):
     },
 
     #########################################
+    ## get_enrichment_figure
+    #########################################
+
+
+    get_enrichment_figure = function(string_ids,
+                                     category = "Process",
+                                     file = NULL,
+                                     output_format = "image",
+                                     group_by_similarity = NULL,
+                                     color_palette = "mint_blue",
+                                     number_of_term_shown = NULL,
+                                     x_axis = "signal",
+                                     caller_identity = "STRINGdb-package") {
+      '
+Description:
+  Returns a STRING enrichment figure for the given identifiers and category.
+
+Input parameters:
+  "string_ids"             a vector of STRING identifiers.
+  "category"               enrichment category to visualize (default "Process")
+  "file"                   file where to save the image output
+  "output_format"          image format returned by STRING ("image", "highres_image" or "svg")
+  "group_by_similarity"    threshold for grouping related terms on the plot (from 0.1 to 1)
+  "color_palette"          color palette used to represent FDR values
+  "number_of_term_shown"   maximum number of terms shown on the plot
+  "x_axis"                 variable used on the x-axis ("signal", "strength", "FDR" or "gene_count")
+  "caller_identity"        caller identifier sent to STRING
+
+Author(s):
+   Damian Szklarczyk
+'
+
+      if (is.null(string_ids) || length(string_ids) == 0) {
+        cat("ERROR: Please provide STRING identifiers.\n")
+        stop()
+      }
+
+      valid_output_formats <- c("image", "highres_image", "svg")
+      if (!(output_format %in% valid_output_formats)) {
+        cat("ERROR: output_format should be one of: image, highres_image, svg.\n")
+        stop()
+      }
+
+      valid_categories <- c(
+        "Process", "Function", "Component", "Keyword", "KEGG", "RCTM",
+        "HPO", "MPO", "DPO", "WPO", "ZPO", "FYPO", "Pfam", "SMART",
+        "InterPro", "PMID", "NetworkNeighborAL", "COMPARTMENTS",
+        "TISSUES", "DISEASES", "WikiPathways"
+      )
+      if (!(category %in% valid_categories)) {
+        cat("ERROR: category should be one of: ", paste(valid_categories, collapse = ", "), ".\n", sep = "")
+        stop()
+      }
+
+      valid_color_palettes <- c("mint_blue", "lime_emerald", "green_blue", "peach_purple", "straw_navy", "yellow_pink")
+      if (!(color_palette %in% valid_color_palettes)) {
+        cat("ERROR: color_palette should be one of: ", paste(valid_color_palettes, collapse = ", "), ".\n", sep = "")
+        stop()
+      }
+
+      valid_x_axes <- c("signal", "strength", "FDR", "gene_count")
+      if (!(x_axis %in% valid_x_axes)) {
+        cat("ERROR: x_axis should be one of: ", paste(valid_x_axes, collapse = ", "), ".\n", sep = "")
+        stop()
+      }
+
+      if (!is.null(group_by_similarity)) {
+        if (!(is.numeric(group_by_similarity) && length(group_by_similarity) == 1 && !is.na(group_by_similarity) &&
+          group_by_similarity >= 0.1 && group_by_similarity <= 1)) {
+          cat("ERROR: group_by_similarity should be a number between 0.1 and 1.\n")
+          stop()
+        }
+      }
+
+      if (!is.null(number_of_term_shown)) {
+        if (!(is.numeric(number_of_term_shown) && length(number_of_term_shown) == 1 && !is.na(number_of_term_shown) &&
+          number_of_term_shown >= 1)) {
+          cat("ERROR: number_of_term_shown should be a positive number.\n")
+          stop()
+        }
+        number_of_term_shown <- as.integer(number_of_term_shown)
+      }
+
+      identifiers <- paste(unique(string_ids[!is.na(string_ids)]), collapse = "\r")
+      urlStr <- paste(stable_url, "/api/", output_format, "/enrichmentfigure", sep = "")
+
+      params <- list(
+        identifiers = identifiers,
+        species = species,
+        category = category,
+        group_by_similarity = group_by_similarity,
+        color_palette = color_palette,
+        number_of_term_shown = number_of_term_shown,
+        x_axis = x_axis,
+        caller_identity = caller_identity
+      )
+      params <- drop_null_params(params)
+
+      params <- lapply(params, function(x) {
+        if (is.numeric(x) && length(x) == 1 && !is.na(x)) {
+          return(as.character(x))
+        }
+        return(x)
+      })
+      response <- POST(url = urlStr, body = params, encode = "form")
+
+      if (output_format == "svg") {
+        img <- content(response, as = "text", encoding = "UTF-8")
+        if (nchar(img) == 0) {
+          cat("ERROR: STRING returned an empty enrichment figure. Please try a different protein set or category.\n")
+          stop()
+        }
+        if (!is.null(file)) cat(img, file = file)
+      } else {
+        raw_img <- response$content
+        if (length(raw_img) == 0) {
+          cat("ERROR: STRING returned an empty enrichment figure. Please try a different protein set or category.\n")
+          stop()
+        }
+        img <- readPNG(raw_img)
+        if (!is.null(file)) writePNG(img, file)
+      }
+
+      return(img)
+    },
+
+    #########################################
     ## plot_network
     #########################################
 
@@ -842,7 +969,8 @@ Author(s):
       params <- list(identifiers = identifiers, species = species)
 
       tempDfv <- postFormSmart(urlStr, .params = params)
-      hhits <- read.table(text = tempDfv, sep = "\t", header = TRUE, stringsAsFactors = FALSE, fill = TRUE)
+      hhits <- read.table(text = tempDfv, sep = "\t", header = FALSE, stringsAsFactors = FALSE, fill = TRUE)
+      names(hhits) <- c("ncbiTaxonId_A", "stringId_A", "ncbiTaxonId_B", "stringId_B", "bitscore")
       return(hhits)
     },
 

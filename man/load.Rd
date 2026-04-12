@@ -20,6 +20,5 @@ It makes use of the variables:
 STRING network (i.e. an iGraph object.  For info look to http://igraph.sourceforge.net)
 }
 \author{
-Andrea Franceschini
+Andrea Franceschini and Damian Szklarczyk
 }
-

@@ -13,8 +13,8 @@
 \begin{document}
 \SweaveOpts{concordance=TRUE, strip.white=false}
 \title{STRINGdb Package Vignette}
-\author{Andrea Franceschini}
-\date{15 March 2015}
+\author{Andrea Franceschini and Damian Szklarczyk}
+\date{}
 \maketitle
 
 \begin{Schunk}
@@ -28,9 +28,9 @@
 
 STRING (https://www.string-db.org) is a database of known and predicted protein-protein interactions. 
 The interactions include direct (physical) and indirect (functional) associations. 
-The database contains information from numerous sources, including experimental repositories, computational prediction methods and public text collections. Each interaction is associated with a combined confidence score that integrates the various evidences.  We currently cover over 24 milions proteins from 5090 organisms.
+The database contains information from numerous sources, including experimental repositories, computational prediction methods and public text collections. Each interaction is associated with a combined confidence score that integrates the various evidences. STRING v12.0 covers 59.3 million proteins from 12,535 organisms and more than 20 billion interactions.
 
-As you will learn in this guide, the STRING database can be usefull to add meaning to list of genes (e.g. the best hits coming out from a screen or the most differentially expressed genes coming out from a Microarray/RNAseq experiment.)
+As you will learn in this guide, the STRING database can be useful to add meaning to lists of genes, for example the best hits coming out from a screen or the most differentially expressed genes coming out from a microarray or RNA-seq experiment.
 
 We provide the STRINGdb R package in order to facilitate our users in accessing the STRING database from R.
 In this guide we explain, with examples, most of the package's features and functionalities.\\
@@ -105,7 +105,7 @@ example1_mapped <- string_db$map( diff_exp_example1, "gene", removeUnmappedRows 
 
 As you may have noticed, the previous command prints a warning showing the number of genes that we failed to map. In this particular example, we cannot map all the probes of the microarray that refer to position of the chromosome that are not assigned to a real gene (i.e. all the LOC genes). If we remove all these LOC genes before the mapping we obtain a much lower percentage of unmapped genes (i.e. < 6 \%). \\
 If you set to FALSE the "removeUnmappedRows" parameter, than the rows which corresponds to unmapped genes are left and you can manually inspect them.\\
-Finally, we extract the most significant 200 genes and we produce an image of the STRING network for those.
+Finally, we extract the genes with p-value < 0.05 and, for the examples below, we focus on the top 200 genes sorted by p-value.
 The image shows clearly the genes and how they are possibly functionally related.
 On the top of the plot, we insert a pvalue that represents the probability that you can expect such an equal or greater number of interactions by chance.
 
@@ -116,7 +116,9 @@ par(mar=c(2.1, 0.1, 4.1, 2.1))))
 \setkeys{Gin}{width=1.2\linewidth}
 
 <<get_hits>>=
-hits <- example1_mapped$STRING_id[1:200]  
+example1_mapped_pval05 <- subset(example1_mapped, pvalue < 0.05)
+example1_mapped_pval05 <- example1_mapped_pval05[order(example1_mapped_pval05$pvalue), ]
+hits <- example1_mapped_pval05$STRING_id[1:200]
 @
 
 
@@ -183,14 +185,34 @@ head(enrichment, n=20)
 \end{Sinput}
 \end{Schunk}
 
+You can also retrieve an enrichment figure directly from STRING for a selected category. The image can be returned as a PNG array or as SVG markup, and you can customize the category, similarity-based grouping, color palette, the number of terms shown, and the variable displayed on the X-axis.
+
+<<enrichment_figure, fig=TRUE>>=
+enrichment_img <- string_db$get_enrichment_figure(
+  hits,
+  category = "Component",
+  group_by_similarity = 0.8,
+  color_palette = "yellow_pink",
+  x_axis = "signal"
+)
+grid::grid.newpage()
+grid::grid.raster(enrichment_img, interpolate = FALSE)
+@
+
+\begin{Schunk}
+\begin{Sinput}
+
+\end{Sinput}
+\end{Schunk}
+
 If you have performed your experiment on a predefined set of proteins, it is important to run the enrichment statistics using that set as a background (otherwise you would get a wrong p-value !). Hence, before to launch the method above, you may want to set the background:
 
-<<background, eval=FALSE>>=
-backgroundV <- example1_mapped$STRING_id[1:2000]   # as an example, we use the first 2000 genes                                                    
+<<background>>=
+backgroundV <- example1_mapped$STRING_id
 string_db$set_background(backgroundV)
 @
 
-You can also set the background when you instantiate the STRINGdb object:
+If you already have a \code{STRINGdb} object, calling \code{set\_background} is sufficient and you do not need to instantiate a new object again. Passing \code{backgroundV} to the constructor is simply an alternative when you already know the background at initialization time:
 
 <<new_background_inst, eval=FALSE>>=
 string_db <- STRINGdb$new( score_threshold=400, backgroundV = backgroundV )
@@ -202,7 +224,20 @@ string_db <- STRINGdb$new( score_threshold=400, backgroundV = backgroundV )
 \end{Sinput}
 \end{Schunk}
 
-If you just want to know terms are assigned to your set of proteins (and not necessary enriched) you can use "get\_annotations" method. This method will output all the terms from most of the categories (the exceptions are KEGG terms due to licensing issues and PubMed due to the size of the output) that are associated with your set of proteins. 
+Once the background has been set, the enrichment results can change substantially because the statistical test is now performed against the selected background rather than the whole proteome. In many cases the enrichment signals become smaller, which is expected: the test is now calibrated against the proteins that were actually measurable or considered in the experiment, rather than against all proteins in the organism.
+
+<<enrichment_with_background>>=
+enrichment_background_corrected <- string_db$get_enrichment( hits )
+head(enrichment_background_corrected, n=20)
+@
+
+\begin{Schunk}
+\begin{Sinput}
+
+\end{Sinput}
+\end{Schunk}
+
+If you just want to know which terms are assigned to your set of proteins, and not necessarily which ones are enriched, you can use "get\_annotations" method. This method outputs the terms from most categories (the exceptions are KEGG terms due to licensing issues and PubMed due to the size of the output) that are associated with your set of proteins. 
 
 <<enrichment>>=
 annotations <- string_db$get_annotations( hits )
@@ -227,20 +262,23 @@ We encapsulate this in an easy-to-use function that returns the clusters in a li
 
 <<clustering1>>=
 # get clusters
-clustersList <- string_db$get_clusters(example1_mapped$STRING_id[1:600])
+clustersList <- string_db$get_clusters(example1_mapped_pval05$STRING_id[1:600])
 @
 
-<<echo=false>>=
-options(SweaveHooks=list(fig=function()
-par(mar=c(2.1, 0.1, 4.1, 2.1))))
-@
-\setkeys{Gin}{width=1.2\linewidth}
+Now we visualize the first four clusters one by one.
+
 <<clustering2, fig=TRUE>>=
-# plot first 4 clusters
-par(mfrow=c(2,2))
-for(i in seq(1:4)){
- string_db$plot_network(clustersList[[i]])
-}
+par(mar = c(0, 0, 0.5, 0))
+string_db$plot_network(clustersList[[1]], add_summary = FALSE)
+
+par(mar = c(0, 0, 0.5, 0))
+string_db$plot_network(clustersList[[2]], add_summary = FALSE)
+
+par(mar = c(0, 0, 0.5, 0))
+string_db$plot_network(clustersList[[3]], add_summary = FALSE)
+
+par(mar = c(0, 0, 0.5, 0))
+string_db$plot_network(clustersList[[4]], add_summary = FALSE)
 @
 
 \begin{Schunk}
@@ -253,10 +291,11 @@ for(i in seq(1:4)){
 \section{ADDITIONAL PROTEIN INFORMATION}
 
 You can get a table that contains all the proteins that are present in our database of the species of interest. 
-The protein table also include the preferred name, the size and a short description of each protein.
+The protein table also includes the preferred name, the size and a short description of each protein.
 
 <<proteins>>=
 string_proteins <- string_db$get_proteins()
+head(string_proteins)
 @
 \begin{Schunk}
 \begin{Sinput}
@@ -283,20 +322,7 @@ It takes in input a vector of protein aliases and returns a vector with the STRI
 \end{Sinput}
 \end{Schunk}
 
-
-
-Using the following method, you can see the proteins that interact with one or more of your proteins:
-<<neighbors, eval=TRUE>>=
-string_db$get_neighbors( c(tp53, atm) )
-@
-
-\begin{Schunk}
-\begin{Sinput}
-
-\end{Sinput}
-\end{Schunk}
-
-It is also possible to retrieve the interactions that connect certain input proteins between each other.\\
+You can retrieve the interactions that connect certain input proteins between each other.\\
 The "get\_interactions" method returns a data frame describing the interactions among the queried proteins. The table contains the STRING identifiers in the \code{from} and \code{to} columns, the corresponding preferred names in \code{from\_name} and \code{to\_name}, the \code{combined\_score}, and any additional evidence scores available for the current \code{link\_data} setting. This makes it easy to inspect both the interacting proteins and the supporting scores for each interaction.
 
 <<interactions>>=
@@ -332,7 +358,7 @@ interaction_partners_exp
 \end{Schunk}
 
 
-STRING provides a way to get homologous proteins: in our database we store ALL-AGAINST-ALL alignments within all 5090 organisms. You can retrive all of the paralogs of the protein using "get\_paralogs" method.  
+STRING provides a way to get homologous proteins: in our database we store ALL-AGAINST-ALL alignments within species. You can retrieve all paralogs of the protein using "get\_paralogs" method.  
 
 <<paralogs, eval=TRUE>>=
 # Get all homologs of TP53 in human.
@@ -344,11 +370,14 @@ string_db$get_paralogs(tp53)
 \end{Sinput}
 \end{Schunk}
 
-STRING also stores best hits (as measured by bitscore) between the proteins from different species. "get\_homologs\_besthits" lets you retrieve these homologs.
+STRING also stores best hits (as measured by bitscore) between proteins from different species. "get\_homologs\_besthits" lets you retrieve these homologs.
 
 <<Closest homologs from other species, eval=TRUE>>=
-# get the best hits of the following protein in all the STRING species
-string_db$get_homologs_besthits(tp53)
+# get the best hits of TP53 in all STRING species
+tp53_besthits <- string_db$get_homologs_besthits(tp53)
+tp53_besthits_100 <- subset(tp53_besthits, bitscore > 100)
+nrow(tp53_besthits_100)
+head(tp53_besthits_100, n=10)
 @
 \begin{Schunk}
 \begin{Sinput}
@@ -356,7 +385,7 @@ string_db$get_homologs_besthits(tp53)
 \end{Sinput}
 \end{Schunk}
 
-... or you can specify the species of interest (i.e. all the blast hits): 
+... or you can specify the species of interest:
 
 <<homologs_besthits in target species, eval=TRUE>>=
 # get the homologs of the following two proteins in the mouse (i.e. species_id=10090)
@@ -375,6 +404,6 @@ string_db$get_homologs_besthits(c(tp53, atm), target_species_id=10090)
 Please cite:\\\\
 
  
-Szklarczyk D, Kirsch R, Koutrouli M, Nastou K, Mehryary F, Hachilif R, Annika GL, Fang T, Doncheva NT, Pyysalo S, Bork P, Jensen LJ, von Mering C. 'The STRING database in 2023: protein-protein association networks and functional enrichment analyses for any sequenced genome of interest.' Nucleic Acids Res. 2023 Jan 6;51(D1):D638-646
+Szklarczyk D, Kirsch R, Koutrouli M, Nastou K, Mehryary F, Hachilif R, Gable AL, Fang T, Doncheva NT, Pyysalo S, Bork P, Jensen LJ, von Mering C. The STRING database in 2023: protein-protein association networks and functional enrichment analyses for any sequenced genome of interest. Nucleic Acids Res. 2023 Jan 6;51(D1):D638-D646. doi: 10.1093/nar/gkac1000.
 
 \end{document}

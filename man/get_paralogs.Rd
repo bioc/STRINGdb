@@ -15,10 +15,9 @@ a vector of STRING identifiers.
 }
 }
 \value{
-Data frame containing the best blast hits x species of the given input identifiers.
+Data frame containing the within-species homology hits of the input identifiers, with columns \code{ncbiTaxonId_A}, \code{stringId_A}, \code{ncbiTaxonId_B}, \code{stringId_B}, and \code{bitscore}.
 }
 \author{
 Andrea Franceschini
 }
-
 

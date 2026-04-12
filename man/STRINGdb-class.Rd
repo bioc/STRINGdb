@@ -6,12 +6,12 @@
 
 \title{Class \code{"STRINGdb"}}
 \description{
-The R package STRINGdb provides a convenient interface to the STRING protein-protein interactions database for the R/bioconductor users.
-Please look at the manual/vignette to get additional informationd and examples on how to use the package.
-STRING is a database of known and predicted protein-protein interactions. It contains information from numerous 
-sources, including experimental repositories, computational prediction methods and public text collections. Each interaction is associated with a combined confidence score that integrates the various evidences. 
-STRING is regularly updated , the latest version 9.05 contains information on 5 millions proteins from more than 1100 species.
-The STRING web interface is freely accessible at: http://string-db.org/
+The R package STRINGdb provides a convenient interface to STRING, a protein-protein interaction database and functional enrichment analysis tool, for R/Bioconductor users.
+Please look at the manual/vignette for additional information and examples on how to use the package.
+STRING is a database of known and predicted protein-protein interactions. It contains information from numerous
+sources, including experimental repositories, computational prediction methods, and public text collections. Each interaction is associated with a combined confidence score that integrates the different evidence channels.
+STRING v12.0 contains information on 59.3 million proteins from 12,535 organisms and more than 20 billion interactions.
+The STRING web interface is freely accessible at: https://string-db.org/
 }
 \section{Extends}{
 
@@ -19,15 +19,10 @@ All reference classes extend and inherit methods from \code{"\linkS4class{envRef
 
 }
 \references{
-Franceschini, A (2013). STRING v9.1: protein-protein interaction networks, with increased coverage and integration. In:'Nucleic Acids Res. 2013 Jan;41(Database issue):D808-15. doi: 10.1093/nar/gks1094. Epub 2012 Nov 29'.
+Szklarczyk D, Kirsch R, Koutrouli M, Nastou K, Mehryary F, Hachilif R, Gable AL, Fang T, Doncheva NT, Pyysalo S, Bork P, Jensen LJ, von Mering C. The STRING database in 2023: protein-protein association networks and functional enrichment analyses for any sequenced genome of interest. Nucleic Acids Res. 2023 Jan 6;51(D1):D638-D646. doi: 10.1093/nar/gkac1000.
 }
 \author{
-Andrea Franceschini
-}
-
-
-\seealso{
-http://stitch-db.org
+Andrea Franceschini and Damian Szklarczyk
 }
 \examples{
 showClass("STRINGdb")
@@ -61,6 +56,7 @@ showClass("STRINGdb")
     \item{\code{get_ppi_enrichment_full(string_ids, sliceWindow, edgeWindow, windowExtendedReferenceThreshold, growingWindowLimit)}:}{ ~~ }
     \item{\code{get_ppi_enrichment(string_ids)}:}{ ~~ }
     \item{\code{get_proteins()}:}{ ~~ }
+    \item{\code{get_enrichment_figure(string_ids, category="Process", file, output_format="image", group_by_similarity, color_palette="mint_blue", number_of_term_shown, x_axis="signal", caller_identity="STRINGdb-package")}:}{ ~~ }
     \item{\code{get_png(string_ids, required_score, network_flavor, file, payload_id, output_format, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity)}:}{ ~~ }
     \item{\code{get_neighbors(string_ids)}:}{ ~~ }
     \item{\code{get_interaction_partners(string_ids, required_score, limit)}:}{ ~~ }
