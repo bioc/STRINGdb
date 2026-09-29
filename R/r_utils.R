@@ -5,8 +5,28 @@
 #
 
 
+# Stops when the STRING server (or the proxy in front of it) failed to answer,
+# for example with a 524 gateway timeout. The body of such a response is an
+# HTML or JSON error page, which the callers would otherwise parse as if it
+# were the requested table or image. Client errors (4xx), such as the 404 that
+# STRING returns for unknown identifiers, are deliberately not handled here
+# to keep the established behaviour of the public methods.
+stop_on_server_error <- function(res, uri) {
+  status <- status_code(res)
+  if (status >= 500) {
+    stop(
+      "ERROR: STRING request failed with HTTP status ", status, " for ", uri,
+      ". The STRING server did not return a valid answer; please try again later.",
+      call. = FALSE
+    )
+  }
+  invisible(res)
+}
+
+
 postFormSmart <- function(uri, .params = list(), .opts = list(), .ctype = "text") {
   res <- POST(url = uri, body = .params, config = .opts)
+  stop_on_server_error(res, uri)
   data <- content(res, as = .ctype)
   return(data)
 }
