@@ -7,11 +7,14 @@ get_neighbors
 Get the neighborhoods of a protein (or of a vector of proteins) that is given in input.
 }
 \usage{
-\S4method{get_neighbors}{STRINGdb}(string_ids)
+\S4method{get_neighbors}{STRINGdb}(string_ids, mode="all")
 }
 \arguments{
   \item{string_ids}{
 a vector of STRING identifiers
+}
+  \item{mode}{
+direction to traverse in a regulatory network: \code{"all"} (default), \code{"out"} for regulated proteins, or \code{"in"} for regulators.
 }
 }
 \value{
@@ -20,5 +23,4 @@ vector containing the neighborhoods of a protein (or of a vector of proteins) th
 \author{
 Andrea Franceschini
 }
-
 

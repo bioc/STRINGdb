@@ -6,6 +6,7 @@ load
 \description{
 Downloads and returns the STRING network (the network is set also in the graph variable of the STRING_db object).
 When possible, the download uses the threshold-specific streamed network file matching the current \code{score_threshold}.
+For \code{network_type="regulatory"}, the returned \code{igraph} object is directed: an edge from \code{protein1} to \code{protein2} represents regulation of the latter by the former.
 
   
 It makes use of the variables:

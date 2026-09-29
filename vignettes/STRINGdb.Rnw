@@ -28,7 +28,7 @@
 
 STRING (https://www.string-db.org) is a database of known and predicted protein-protein interactions. 
 The interactions include direct (physical) and indirect (functional) associations. 
-The database contains information from numerous sources, including experimental repositories, computational prediction methods and public text collections. Each interaction is associated with a combined confidence score that integrates the various evidences. STRING v12.0 covers 59.3 million proteins from 12,535 organisms and more than 20 billion interactions.
+The database contains information from numerous sources, including experimental repositories, computational prediction methods and public text collections. Each interaction is associated with a combined confidence score that integrates the various evidences. STRING v12.5 covers 59.3 million proteins from 12,535 organisms and more than 28 billion interactions. It also provides directed regulatory networks alongside the functional and physical networks.
 
 As you will learn in this guide, the STRING database can be useful to add meaning to lists of genes, for example the best hits coming out from a screen or the most differentially expressed genes coming out from a microarray or RNA-seq experiment.
 
@@ -49,7 +49,7 @@ Hence, if your species is not Human (i.e. our default species), you can find it 
 
 <<initialization>>=
 library(STRINGdb)
-string_db <- STRINGdb$new( version="12.0", species=9606, 
+string_db <- STRINGdb$new( version="12.5", species=9606, 
                            score_threshold=400, network_type="full", link_data="detailed", input_directory="")
 @
 
@@ -61,7 +61,7 @@ string_db <- STRINGdb$new( version="12.0", species=9606,
 
 As it has been shown in the above commands, you start instantiating the STRINGdb reference class.
 In the constructor of the class you can also define the STRING version to be used and a threshold for the combined scores of the interactions, such that any interaction below that threshold is not loaded in the object (by default the score threshold is set to 400).\\
-You can also specify the network type "functional" for full functional STRING network or "physical" for physical subnetwork, which link only the proteins which share a physical complex.\\ 
+You can also specify the network type "full" (or its alias "functional") for the full functional STRING network, "physical" for the physical subnetwork, or "regulatory" for the directed regulatory subnetwork. In a regulatory network, an edge points from the regulator to its target. Use \texttt{network\_flavor="typed"} with a full/functional network to show the typed network view in the STRING web interface; this view is not available for a regulatory network. The optional \texttt{typed\_physical\_edges}, \texttt{typed\_regulatory\_edges}, and \texttt{show\_regulatory\_signs} arguments select which typed-edge details are shown.\\ 
 Besides, if you specify a local directory to the parameter input-directory, the database files will be downloaded into this directory and most of the methods can be used off-line. Otherwise, the database files will be saved and cached in a temporary directory that will be cleaned automatically when the R session is closed. By setting \texttt{link\_data="detailed"} we also load the evidence score columns, such as the experimental score, in addition to the combined score.\\\\
 
 For a better understanding of the package two other commands can be useful:
@@ -311,6 +311,7 @@ First we need to get the STRING identifier of those proteins, using our mp metho
 <<atmtp>>=
 tp53 = string_db$mp( "tp53" )
 atm = string_db$mp( "atm" )
+mdm2 = string_db$mp( "mdm2" )
 @
 
 The mp method (i.e. map proteins) is an alternative to our map method, to be used when you need to map only one or few proteins.\\
@@ -321,6 +322,48 @@ It takes in input a vector of protein aliases and returns a vector with the STRI
 
 \end{Sinput}
 \end{Schunk}
+
+\section{TYPED NETWORK VIEWS AND REGULATORY EDGES}
+
+The full functional network, physical network, and regulatory network have different edge semantics. The functional and physical networks are undirected, while the regulatory network is directed from regulator to target. Create a separate \texttt{STRINGdb} object for each network type that you need; they can use the same cache directory because their downloaded link files have distinct names. The \texttt{string\_db} object created above is the functional network object.
+
+<<network_types>>=
+functional_db <- string_db
+physical_db <- STRINGdb$new(
+  version = "12.5", species = 9606, score_threshold = 400,
+  network_type = "physical", link_data = "detailed",
+  input_directory = functional_db$input_directory
+)
+regulatory_db <- STRINGdb$new(
+  version = "12.5", species = 9606, score_threshold = 400,
+  network_type = "regulatory", link_data = "detailed",
+  input_directory = functional_db$input_directory
+)
+@
+
+Use the typed view on the functional object to overlay the physical and regulatory edge types. The three typed-edge arguments control which edge types and regulatory signs are shown:
+
+<<typed_network, fig=TRUE>>=
+functional_db$plot_network(
+  c(tp53, mdm2),
+  network_flavor = "typed",
+  typed_physical_edges = TRUE,
+  typed_regulatory_edges = TRUE,
+  show_regulatory_signs = TRUE
+)
+@
+
+For analysis of regulation, use the regulatory object itself. Its interaction table retains direction: \texttt{from} is the regulator and \texttt{to} is its target. For example, the following retrieves regulatory links within the TP53--MDM2 pair and lists them as \texttt{from\_name -> to\_name}.
+
+This pair illustrates a well-characterized negative-feedback circuit: TP53 transcriptionally activates MDM2, whereas MDM2 promotes proteasome-dependent degradation of TP53. Both directions are therefore expected in the regulatory graph.
+
+<<regulatory_edges>>=
+regulatory_edges <- regulatory_db$get_interactions(c(tp53, mdm2))
+regulatory_edges$regulatory_edge <- paste(
+  regulatory_edges$from_name, "->", regulatory_edges$to_name
+)
+regulatory_edges[, c("regulatory_edge", "combined_score")]
+@
 
 You can retrieve the interactions that connect certain input proteins between each other.\\
 The "get\_interactions" method returns a data frame describing the interactions among the queried proteins. The table contains the STRING identifiers in the \texttt{from} and \texttt{to} columns, the corresponding preferred names in \texttt{from\_name} and \texttt{to\_name}, the \texttt{combined\_score}, and any additional evidence scores available for the current \texttt{link\_data} setting. This makes it easy to inspect both the interacting proteins and the supporting scores for each interaction.
@@ -404,6 +447,6 @@ string_db$get_homologs_besthits(c(tp53, atm), target_species_id=10090)
 Please cite:\\\\
 
  
-Szklarczyk D, Kirsch R, Koutrouli M, Nastou K, Mehryary F, Hachilif R, Gable AL, Fang T, Doncheva NT, Pyysalo S, Bork P, Jensen LJ, von Mering C. The STRING database in 2023: protein-protein association networks and functional enrichment analyses for any sequenced genome of interest. Nucleic Acids Res. 2023 Jan 6;51(D1):D638-D646. doi: 10.1093/nar/gkac1000.
+Szklarczyk D, Nastou K, Koutrouli M, Kirsch R, Mehryary F, Hachilif R, Hu D, Peluso ME, Huang Q, Fang T, Doncheva NT, Pyysalo S, Bork P, Jensen LJ, von Mering C. The STRING database in 2025: protein networks with directionality of regulation. Nucleic Acids Res. 2025 Jan 6;53(D1):D730-D737. doi: 10.1093/nar/gkae1113.
 
 \end{document}

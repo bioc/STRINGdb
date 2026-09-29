@@ -4,7 +4,8 @@
 get_graph
 }
 \description{
-Return an igraph object with the STRING network (for information about iGraph visit http://igraph.sourceforge.net)
+Return an igraph object with the STRING network (for information about iGraph visit http://igraph.sourceforge.net).
+For \code{network_type="regulatory"}, the graph is directed from regulator to target.
 }
 \references{
   Csardi G, Nepusz T: The igraph software package for complex network research, InterJournal, Complex Systems 1695. 2006. 
@@ -25,5 +26,3 @@ igraph object with the STRING network
 \author{
 Andrea Franceschini
 }
-
-

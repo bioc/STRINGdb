@@ -5,6 +5,7 @@ get_bioc_graph
 }
 \description{
 Returns the interaction graph as an object of the graph package in Bioconductor.
+For \code{network_type="regulatory"}, the returned \code{graphNEL} object preserves edge direction.
 }
 \usage{
 \S4method{get_bioc_graph}{STRINGdb}()
@@ -15,5 +16,4 @@ interaction graph as an object of the graph package in Bioconductor.
 \author{
 Andrea Franceschini
 }
-
 

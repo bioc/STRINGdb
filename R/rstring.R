@@ -112,9 +112,12 @@ Author(s):
       if (length(network_type) == 0) {
         network_type <<- "full"
       } else {
-        if (!(tolower(network_type) == "full" || tolower(network_type) == "physical")) {
-          cat("WARNING: Only 'full' and 'physical' network types are valid. Setting to the network type to 'full' STRING network.\n")
+        normalized_network_type <- normalize_network_type(network_type)
+        if (is.null(normalized_network_type)) {
+          cat("WARNING: Only 'full' (or 'functional'), 'physical' and 'regulatory' network types are valid. Setting the network type to the full STRING network.\n")
           network_type <<- "full"
+        } else {
+          network_type <<- normalized_network_type
         }
       }
 
@@ -149,6 +152,11 @@ Author(s):
         cat("Available versions:\n")
         print(valid_versions)
         stop()
+      }
+
+      if (is_regulatory_network(network_type) &&
+          !is_regulatory_network_version_supported(version)) {
+        stop("ERROR: network_type='regulatory' is available only with STRING version 12.5 or later.")
       }
 
       file_version <<- version
@@ -322,10 +330,7 @@ Author(s):
         library(graph)
         if (is.null(graph)) load()
 
-        network_type_param <- ""
-        if (tolower(network_type) == "physical") {
-          network_type_param <- "physical."
-        }
+        network_type_param <- network_type_to_download_prefix(network_type)
 
         url <- paste(protocol, "://stringdb-downloads.org/download/protein.", network_type_param, "links.v", file_version, "/", species, ".protein.", network_type_param, "links.v", file_version, ".txt.gz", sep = "")
         temp <- downloadAbsentFile(url, oD = input_directory)
@@ -341,7 +346,18 @@ Author(s):
           PPIselected <- PPIselected[PPIselected$protein2 %in% backgroundV, ]
         }
 
-        nel_graph <- ftM2graphNEL(cbind(PPIselected$protein1, PPIselected$protein2), W = c(PPIselected$combined_score))
+        edge_mode <- "undirected"
+        if (is_regulatory_network(network_type)) {
+          edge_mode <- "directed"
+        }
+        nel_graph <- ftM2graphNEL(
+          cbind(PPIselected$protein1, PPIselected$protein2),
+          W = c(PPIselected$combined_score), edgemode = edge_mode
+        )
+        if (is_regulatory_network(network_type)) {
+          return(nel_graph)
+        }
+
         nel_graph2 <- ugraph(nel_graph)
 
         return(nel_graph2)
@@ -358,6 +374,10 @@ Author(s):
 
 
     get_clusters = function(string_ids, algorithm = "fastgreedy") {
+
+      if (is_regulatory_network(network_type)) {
+        stop("ERROR: get_clusters does not support the directed regulatory network. Use a functional or physical STRING network for clustering.")
+      }
       '
 Description:
   Returns a list of clusters of interacting proteins.
@@ -468,6 +488,46 @@ Author(s):
       }
 
       return(ann)
+    },
+
+    #########################################
+    ## get_geneset_description
+    #########################################
+
+    get_geneset_description = function(string_ids, caller_identity = "STRINGdb-package") {
+      '
+Description:
+  Returns concise primary, secondary and tertiary descriptions of a protein set,
+  based on STRING functional enrichment.
+
+Input parameters:
+  "string_ids"        vector of STRING identifiers.
+  "caller_identity"   caller identifier sent to STRING.
+
+Author(s):
+   Damian Szklarczyk
+'
+
+      string_ids <- unique(string_ids)
+      string_ids <- string_ids[!is.na(string_ids)]
+
+      if (length(string_ids) == 0) {
+        stop("ERROR: Please provide at least one STRING identifier.")
+      }
+
+      if (length(string_ids) > 2000) {
+        stop("ERROR: We do not support lists with more than 2000 genes. Please reduce the size of your input and rerun the analysis.")
+      }
+
+      urlStr <- paste(stable_url, "/api/tsv/geneset_description", sep = "")
+      params <- list(
+        identifiers = collapse_string_identifiers(string_ids),
+        species = species,
+        caller_identity = caller_identity
+      )
+
+      response <- postFormSmart(urlStr, .params = params)
+      return(read.table(text = response, sep = "\t", header = TRUE, stringsAsFactors = FALSE, quote = "", fill = TRUE))
     },
 
     #########################################
@@ -601,7 +661,8 @@ Author(s):
     ## plot_network
     #########################################
 
-    plot_network = function(string_ids, payload_id = NULL, required_score = NULL, add_link = FALSE, network_flavor = "evidence", add_summary = TRUE) {
+    plot_network = function(string_ids, payload_id = NULL, required_score = NULL, add_link = FALSE, network_flavor = "evidence", add_summary = TRUE,
+                            typed_physical_edges = NULL, typed_regulatory_edges = NULL, show_regulatory_signs = NULL) {
       '
 Description:
   Plots an image of the STRING network with the given proteins.
@@ -613,6 +674,11 @@ Input parameters:
                       As default this option is active but we suggest to deactivate it in case one is generating many images (e.g. in a loop).
                       Deactivating this option avoids to generate and store a lot of short-urls on our server.
   "add_summary"       parameter to specify whether you want to add a summary text to the picture. This summary includes a p-value and the number of proteins/interactions.
+  "network_flavor"   use "typed" for the typed functional STRING network view.
+                     This flavor is available only with network_type="full" (or "functional").
+  "typed_physical_edges"  include physical edges in the typed network view (TRUE/FALSE or 0/1).
+  "typed_regulatory_edges"  include regulatory edges in the typed network view (TRUE/FALSE or 0/1).
+  "show_regulatory_signs"  show positive/negative regulatory signs in the typed network view (TRUE/FALSE or 0/1).
 
 Author(s):
    Andrea Franceschini
@@ -624,11 +690,15 @@ Author(s):
       }
 
       if (is.null(required_score)) required_score <- score_threshold
-      img <- get_png(string_ids, payload_id = payload_id, required_score = required_score, network_flavor = network_flavor)
+      img <- get_png(string_ids, payload_id = payload_id, required_score = required_score, network_flavor = network_flavor,
+        typed_physical_edges = typed_physical_edges, typed_regulatory_edges = typed_regulatory_edges,
+        show_regulatory_signs = show_regulatory_signs)
       if (!is.null(img)) {
         plot(1:(dim(img)[2]), type = "n", xaxt = "n", yaxt = "n", xlab = "", ylab = "", ylim = c(1, dim(img)[1]), xlim = c(1, (dim(img)[2])), asp = 1)
         if (add_summary) mtext(get_summary(string_ids, required_score), cex = 0.7)
-        if (add_link) mtext(get_link(string_ids, payload_id = payload_id, required_score = required_score), cex = 0.7, side = 1)
+        if (add_link) mtext(get_link(string_ids, payload_id = payload_id, required_score = required_score,
+          network_flavor = network_flavor, typed_physical_edges = typed_physical_edges,
+          typed_regulatory_edges = typed_regulatory_edges, show_regulatory_signs = show_regulatory_signs), cex = 0.7, side = 1)
         rasterImage(img, 1, 1, (dim(img)[2]), dim(img)[1])
       }
     },
@@ -694,14 +764,16 @@ Author(s):
       }
 
 
+      network_type_param <- network_type_to_api(network_type)
+
       if (length(backgroundV) == 0) {
-        params <- list(species = species, identifiers = identifiers, required_score = required_score)
+        params <- list(species = species, identifiers = identifiers, required_score = required_score, network_type = network_type_param)
       } else {
         background <- ""
         for (id in backgroundV) {
           background <- paste(background, id, "%0d", sep = "")
         }
-        params <- list(species = species, identifiers = identifiers, background_string_identifiers = background, required_score = required_score)
+        params <- list(species = species, identifiers = identifiers, background_string_identifiers = background, required_score = required_score, network_type = network_type_param)
       }
 
 
@@ -734,7 +806,10 @@ Author(s):
                        flat_node_design = TRUE,
                        center_node_labels = NULL,
                        custom_label_font_size = NULL,
-                       caller_identity = "STRINGdb-package") {
+                       caller_identity = "STRINGdb-package",
+                       typed_physical_edges = NULL,
+                       typed_regulatory_edges = NULL,
+                       show_regulatory_signs = NULL) {
       '
 Description:
   Returns a STRING protein network image with the given identifiers.
@@ -743,7 +818,8 @@ Input parameters:
   "string_ids"        a vector of STRING identifiers. Can be omitted when network_term_id is provided.
   "required_score"    minimum STRING combined score of the interactions
                         (if left NULL we get the combined score of the object, which is 400 by default)
-  "network_flavor"    specify the flavor of the network ("evidence" or "confidence".  default "evidence")
+  "network_flavor"    specify the flavor of the network ("evidence", "confidence" or "typed".  default "evidence").
+                      The typed flavor is available only with network_type="full" (or "functional").
   "file"              file where to save the image
   "output_format"     image format returned by STRING ("image", "highres_image" or "svg")
   "network_term_id"   functional term identifier used by STRING instead of explicit protein identifiers
@@ -755,7 +831,9 @@ Input parameters:
   "custom_label_font_size"   changes the font size of node labels (from 5 to 50, default 12)
   "caller_identity"   caller identifier sent to STRING
   "payload_id"        identifier of payload data on the STRING server (see method post_payload for additional informations)
-
+  "typed_physical_edges"  include physical edges in the typed network view (TRUE/FALSE or 0/1)
+  "typed_regulatory_edges"  include regulatory edges in the typed network view (TRUE/FALSE or 0/1)
+  "show_regulatory_signs"  show positive/negative regulatory signs in the typed network view (TRUE/FALSE or 0/1)
 Author(s):
    Andrea Franceschini
 '
@@ -771,20 +849,18 @@ Author(s):
 
       if (is.null(required_score)) required_score <- score_threshold
 
-      network_type_param <- "functional"
-      if (tolower(network_type) == "physical") {
-        network_type_param <- "physical"
-      }
+      network_type_param <- network_type_to_api(network_type)
 
       if (!(output_format %in% c("image", "highres_image", "svg"))) {
         cat("ERROR: output_format should be one of: image, highres_image, svg.\n")
         stop()
       }
 
-      if (!(network_flavor %in% c("evidence", "confidence"))) {
-        cat("ERROR: network_flavor should be either 'evidence' or 'confidence'.\n")
-        stop()
-      }
+      network_flavor <- normalize_network_flavor(network_flavor, network_type)
+      typed_controls <- normalize_typed_network_controls(
+        typed_physical_edges, typed_regulatory_edges, show_regulatory_signs,
+        network_flavor
+      )
 
       hide_node_labels <- normalize_api_flag(hide_node_labels, "hide_node_labels")
       hide_disconnected_nodes <- normalize_api_flag(hide_disconnected_nodes, "hide_disconnected_nodes")
@@ -816,6 +892,9 @@ Author(s):
         flat_node_design = flat_node_design,
         center_node_labels = center_node_labels,
         custom_label_font_size = custom_label_font_size,
+        typed_physical_edges = typed_controls$typed_physical_edges,
+        typed_regulatory_edges = typed_controls$typed_regulatory_edges,
+        show_regulatory_signs = typed_controls$show_regulatory_signs,
         caller_identity = caller_identity
       )
 
@@ -1057,25 +1136,30 @@ Author(s):
     #########################################
 
 
-    get_neighbors = function(string_ids) {
+    get_neighbors = function(string_ids, mode = "all") {
       '
 Description:
 Get the neighborhoods of a protein (or of a vector of proteins) that is given in input.
 
 Input parameters:
   "string_ids" =  a vector of STRING identifiers.
+  "mode" = direction to traverse in a regulatory network: "all" (default), "out" for regulated proteins, or "in" for regulators.
 
 Author(s):
    Andrea Franceschini
 '
       if (is.null(graph)) load()
 
+      if (!(mode %in% c("all", "out", "in"))) {
+        stop("ERROR: mode should be one of: 'all', 'out' or 'in'.")
+      }
+
       vp <- intersect(string_ids, V(graph)$name)
 
       ns <- c()
 
       for (vertex in vp) {
-        ns <- append(ns, unique(V(graph)[neighbors(graph, vertex)]$name))
+        ns <- append(ns, unique(V(graph)[neighbors(graph, vertex, mode = mode)]$name))
       }
       return(ns)
     },
@@ -1120,6 +1204,8 @@ Author(s):
         return(data.frame())
       }
 
+      directed_graph <- is_igraph_directed(graph)
+
       result_list <- list()
       result_index <- 1
 
@@ -1148,8 +1234,10 @@ Author(s):
           edge_hits <- edge_hits[seq_len(min(limit, nrow(edge_hits))), , drop = FALSE]
         }
 
-        edge_hits$from <- query_id
-        edge_hits$to <- edge_hits$partner
+        if (!directed_graph) {
+          edge_hits$from <- query_id
+          edge_hits$to <- edge_hits$partner
+        }
         edge_hits$partner <- NULL
         trailing_cols <- setdiff(names(edge_hits), c("from", "to"))
         edge_hits <- edge_hits[, c("from", "to", trailing_cols), drop = FALSE]
@@ -1162,8 +1250,13 @@ Author(s):
         return(data.frame())
       }
 
+      result_df <- do.call(rbind, result_list)
+      if (directed_graph) {
+        result_df <- unique(result_df)
+      }
+
       proteins <<- get_proteins()
-      return(format_interaction_dataframe(do.call(rbind, result_list), proteins_df = proteins, from_col = "from", to_col = "to"))
+      return(format_interaction_dataframe(result_df, proteins_df = proteins, from_col = "from", to_col = "to"))
     },
 
 
@@ -1283,10 +1376,7 @@ Author(s):
 '
 
 
-      network_type_param <- ""
-      if (tolower(network_type) == "physical") {
-        network_type_param <- "physical."
-      }
+      network_type_param <- network_type_to_download_prefix(network_type)
 
       link_data_param <- "links.v"
 
@@ -1313,7 +1403,7 @@ Author(s):
         PPIselected <- PPIselected[PPIselected$protein2 %in% backgroundV, ]
       }
 
-      myg <- graph.data.frame(PPIselected, FALSE)
+      myg <- graph.data.frame(PPIselected, directed = is_regulatory_network(network_type))
       graph <<- myg
       return(myg)
     },
@@ -1679,7 +1769,10 @@ Author(s):
                         flat_node_design = TRUE,
                         center_node_labels = NULL,
                         custom_label_font_size = NULL,
-                        caller_identity = "STRINGdb-package") {
+                        caller_identity = "STRINGdb-package",
+                        typed_physical_edges = NULL,
+                        typed_regulatory_edges = NULL,
+                        show_regulatory_signs = NULL) {
       '
 Description:
   Returns a short link to the network page of our STRING website that shows the protein interactions between the given identifiers.
@@ -1688,7 +1781,8 @@ Input parameters:
   "string_ids"        a vector of STRING identifiers. Can be omitted when network_term_id is provided.
   "required_score"    minimum STRING combined score of the interactions
                         (if left NULL we get the combined score of the object, which is 400 by default)
-  "network_flavor"    specify the flavor of the network ("evidence" or "confidence".  default "evidence")
+  "network_flavor"    specify the flavor of the network ("evidence", "confidence" or "typed".  default "evidence").
+                      The typed flavor is available only with network_type="full" (or "functional").
   "network_term_id"   functional term identifier used by STRING instead of explicit protein identifiers
   "hide_node_labels"  hides all protein names from the picture (TRUE/FALSE or 0/1, default FALSE)
   "hide_disconnected_nodes"  hides all proteins that are not connected to any other protein in your network (TRUE/FALSE or 0/1, default FALSE)
@@ -1697,7 +1791,9 @@ Input parameters:
   "center_node_labels"  centers protein names on nodes (TRUE/FALSE or 0/1, default FALSE)
   "custom_label_font_size"   changes the font size of node labels (from 5 to 50, default 12)
   "caller_identity"   caller identifier sent to STRING
-
+  "typed_physical_edges"  include physical edges in the typed network view (TRUE/FALSE or 0/1)
+  "typed_regulatory_edges"  include regulatory edges in the typed network view (TRUE/FALSE or 0/1)
+  "show_regulatory_signs"  show positive/negative regulatory signs in the typed network view (TRUE/FALSE or 0/1)
 Author(s):
    Andrea Franceschini
 '
@@ -1722,15 +1818,13 @@ Author(s):
       urlStr <- paste(stable_url, "/api/tsv-no-header/get_link", sep = "")
       identifiers <- collapse_string_identifiers(string_ids)
 
-      if (!(network_flavor %in% c("evidence", "confidence"))) {
-        cat("ERROR: network_flavor should be either 'evidence' or 'confidence'.\n")
-        stop()
-      }
+      network_flavor <- normalize_network_flavor(network_flavor, network_type)
+      typed_controls <- normalize_typed_network_controls(
+        typed_physical_edges, typed_regulatory_edges, show_regulatory_signs,
+        network_flavor
+      )
 
-      network_type_param <- "functional"
-      if (tolower(network_type) == "physical") {
-        network_type_param <- "physical"
-      }
+      network_type_param <- network_type_to_api(network_type)
 
       hide_node_labels <- normalize_api_flag(hide_node_labels, "hide_node_labels")
       hide_disconnected_nodes <- normalize_api_flag(hide_disconnected_nodes, "hide_disconnected_nodes")
@@ -1761,6 +1855,9 @@ Author(s):
         flat_node_design = flat_node_design,
         center_node_labels = center_node_labels,
         custom_label_font_size = custom_label_font_size,
+        typed_physical_edges = typed_controls$typed_physical_edges,
+        typed_regulatory_edges = typed_controls$typed_regulatory_edges,
+        show_regulatory_signs = typed_controls$show_regulatory_signs,
         caller_identity = caller_identity
       )
       if (!is.null(payload_id)) params["internal_payload_id"] <- payload_id

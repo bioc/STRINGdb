@@ -5,6 +5,7 @@ get_clusters
 }
 \description{
 Returns a list of clusters of interacting proteins.
+Clustering is not available for the directed \code{network_type="regulatory"} network.
 See the iGraph (http://igraph.sourceforge.net/) documentation for additional information on the algorithms.
 }
 \usage{
@@ -24,5 +25,3 @@ list of clusters of interacting proteins.
 \author{
 Andrea Franceschini
 }
-
-

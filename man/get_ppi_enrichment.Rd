@@ -6,6 +6,7 @@ get_ppi_enrichment
 \description{
 Returns a pvalue representing the enrichment in interactions of the list of proteins 
           (i.e. the probability to obtain such a number of interactions by chance).
+The calculation uses the object's selected functional, physical, or regulatory network type.
 }
 \usage{
 \S4method{get_ppi_enrichment}{STRINGdb}(string_ids)
@@ -21,5 +22,4 @@ Returns a pvalue representing the enrichment in interactions of the list of prot
 \author{
 Andrea Franceschini
 }
-
 
