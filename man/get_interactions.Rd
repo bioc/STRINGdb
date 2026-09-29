@@ -4,7 +4,7 @@
 get_interactions
 }
 \description{
-Shows the interactions in between the proteins that are given in input.
+Shows the interactions in between the proteins that are given in input. For a regulatory network, \code{from} is the regulator and \code{to} is the regulated protein.
 }
 \usage{
 \S4method{get_interactions}{STRINGdb}(string_ids)

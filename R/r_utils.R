@@ -136,6 +136,125 @@ normalize_api_flag <- function(value, param_name) {
 }
 
 
+normalize_network_type <- function(value) {
+  if (length(value) != 1 || is.na(value)) {
+    return(NULL)
+  }
+
+  value <- tolower(value)
+  if (value == "functional") {
+    value <- "full"
+  }
+
+  if (!(value %in% c("full", "physical", "regulatory"))) {
+    return(NULL)
+  }
+
+  return(value)
+}
+
+
+network_type_to_api <- function(network_type) {
+  network_type <- normalize_network_type(network_type)
+  if (is.null(network_type)) {
+    stop("ERROR: invalid network type.")
+  }
+
+  if (network_type == "full") {
+    return("functional")
+  }
+
+  return(network_type)
+}
+
+
+network_type_to_download_prefix <- function(network_type) {
+  network_type <- normalize_network_type(network_type)
+  if (is.null(network_type)) {
+    stop("ERROR: invalid network type.")
+  }
+
+  if (network_type == "full") {
+    return("")
+  }
+
+  return(paste(network_type, ".", sep = ""))
+}
+
+
+is_regulatory_network <- function(network_type) {
+  return(identical(normalize_network_type(network_type), "regulatory"))
+}
+
+
+is_regulatory_network_version_supported <- function(version) {
+  version_number <- suppressWarnings(as.numeric(version))
+  return(!is.na(version_number) && version_number >= 12.5)
+}
+
+
+normalize_network_flavor <- function(value, network_type) {
+  if (length(value) != 1 || is.na(value)) {
+    stop("ERROR: network_flavor should be one of: 'evidence', 'confidence' or 'typed'.")
+  }
+
+  value <- tolower(value)
+  if (value == "actions") {
+    warning("network_flavor='actions' is a compatibility alias; using 'typed'.")
+    value <- "typed"
+  }
+
+  if (!(value %in% c("evidence", "confidence", "typed"))) {
+    stop("ERROR: network_flavor should be one of: 'evidence', 'confidence' or 'typed'.")
+  }
+
+  normalized_network_type <- normalize_network_type(network_type)
+  if (is.null(normalized_network_type)) {
+    stop("ERROR: invalid network type.")
+  }
+
+  if (value == "typed" && normalized_network_type != "full") {
+    stop("ERROR: network_flavor='typed' is available only with network_type='full' (or 'functional').")
+  }
+
+  return(value)
+}
+
+
+normalize_typed_network_controls <- function(typed_physical_edges,
+                                             typed_regulatory_edges,
+                                             show_regulatory_signs,
+                                             network_flavor) {
+  typed_physical_edges <- normalize_api_flag(typed_physical_edges, "typed_physical_edges")
+  typed_regulatory_edges <- normalize_api_flag(typed_regulatory_edges, "typed_regulatory_edges")
+  show_regulatory_signs <- normalize_api_flag(show_regulatory_signs, "show_regulatory_signs")
+
+  typed_controls <- c(typed_physical_edges, typed_regulatory_edges, show_regulatory_signs)
+  if (length(typed_controls) > 0 && network_flavor != "typed") {
+    stop("ERROR: typed edge controls are available only with network_flavor='typed'.")
+  }
+
+  if (identical(typed_regulatory_edges, 0L) && identical(show_regulatory_signs, 1L)) {
+    stop("ERROR: show_regulatory_signs requires typed_regulatory_edges=TRUE.")
+  }
+
+  return(list(
+    typed_physical_edges = typed_physical_edges,
+    typed_regulatory_edges = typed_regulatory_edges,
+    show_regulatory_signs = show_regulatory_signs
+  ))
+}
+
+
+is_igraph_directed <- function(graph) {
+  if (exists("is_directed", envir = asNamespace("igraph"), inherits = FALSE)) {
+    return(igraph::is_directed(graph))
+  }
+
+  return(igraph::is.directed(graph))
+}
+
+
 # delete column in data frame
 delColDf <- function(df, colName) {
   if (colName %in% names(df)) {

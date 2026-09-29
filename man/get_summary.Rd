@@ -5,6 +5,7 @@ get_summary
 }
 \description{
 Returns a summary of the STRING sub-network containing the identifiers provided in input.
+The summary and its interaction-enrichment p-value use the object's selected network type.
 }
 \usage{
 \S4method{get_summary}{STRINGdb}(string_ids)
@@ -20,5 +21,4 @@ Returns a summary (i.e. a text description) of the STRING sub-network containing
 \author{
 Andrea Franceschini
 }
-
 

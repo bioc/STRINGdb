@@ -10,7 +10,7 @@ The R package STRINGdb provides a convenient interface to STRING, a protein-prot
 Please look at the manual/vignette for additional information and examples on how to use the package.
 STRING is a database of known and predicted protein-protein interactions. It contains information from numerous
 sources, including experimental repositories, computational prediction methods, and public text collections. Each interaction is associated with a combined confidence score that integrates the different evidence channels.
-STRING v12.0 contains information on 59.3 million proteins from 12,535 organisms and more than 20 billion interactions.
+STRING v12.5 contains information on 59.3 million proteins from 12,535 organisms and more than 28 billion interactions. It provides functional, physical, and directed regulatory networks.
 The STRING web interface is freely accessible at: https://string-db.org/
 }
 \section{Extends}{
@@ -19,7 +19,7 @@ All reference classes extend and inherit methods from \code{"\linkS4class{envRef
 
 }
 \references{
-Szklarczyk D, Kirsch R, Koutrouli M, Nastou K, Mehryary F, Hachilif R, Gable AL, Fang T, Doncheva NT, Pyysalo S, Bork P, Jensen LJ, von Mering C. The STRING database in 2023: protein-protein association networks and functional enrichment analyses for any sequenced genome of interest. Nucleic Acids Res. 2023 Jan 6;51(D1):D638-D646. doi: 10.1093/nar/gkac1000.
+Szklarczyk D, Nastou K, Koutrouli M, Kirsch R, Mehryary F, Hachilif R, Hu D, Peluso ME, Huang Q, Fang T, Doncheva NT, Pyysalo S, Bork P, Jensen LJ, von Mering C. The STRING database in 2025: protein networks with directionality of regulation. Nucleic Acids Res. 2025 Jan 6;53(D1):D730-D737. doi: 10.1093/nar/gkae1113.
 }
 \author{
 Andrea Franceschini and Damian Szklarczyk
@@ -37,6 +37,8 @@ showClass("STRINGdb")
     \item{\code{speciesList}:}{Object of class \code{data.frame} ~~ }
     \item{\code{species}:}{Object of class \code{numeric} ~~ }
     \item{\code{version}:}{Object of class \code{character} ~~ }
+    \item{\code{network_type}:}{Object of class \code{character}. One of \code{"full"}, \code{"physical"}, or \code{"regulatory"}. The regulatory network requires STRING v12.5 or later. ~~ }
+    \item{\code{link_data}:}{Object of class \code{character}. One of \code{"combined_only"}, \code{"detailed"}, or \code{"full"}. ~~ }
     \item{\code{input_directory}:}{Object of class \code{character} ~~ }
     \item{\code{backgroundV}:}{Object of class \code{vector} ~~ }
     \item{\code{score_threshold}:}{Object of class \code{numeric} ~~ }
@@ -57,15 +59,16 @@ showClass("STRINGdb")
     \item{\code{get_ppi_enrichment(string_ids)}:}{ ~~ }
     \item{\code{get_proteins()}:}{ ~~ }
     \item{\code{get_enrichment_figure(string_ids, category="Process", file, output_format="image", group_by_similarity, color_palette="mint_blue", number_of_term_shown, x_axis="signal", caller_identity="STRINGdb-package")}:}{ ~~ }
-    \item{\code{get_png(string_ids, required_score, network_flavor, file, payload_id, output_format, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity)}:}{ ~~ }
-    \item{\code{get_neighbors(string_ids)}:}{ ~~ }
+    \item{\code{get_png(string_ids, required_score, network_flavor, file, payload_id, output_format, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity, typed_physical_edges, typed_regulatory_edges, show_regulatory_signs)}:}{ ~~ }
+    \item{\code{get_neighbors(string_ids, mode="all")}:}{ ~~ }
     \item{\code{get_interaction_partners(string_ids, required_score, limit)}:}{ ~~ }
-    \item{\code{get_link(string_ids, required_score, network_flavor, payload_id, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity)}:}{ ~~ }
+    \item{\code{get_link(string_ids, required_score, network_flavor, payload_id, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity, typed_physical_edges, typed_regulatory_edges, show_regulatory_signs)}:}{ ~~ }
     \item{\code{get_interactions(string_ids)}:}{ ~~ }
     \item{\code{get_homologs_besthits(string_ids, symbets, target_species_id, bitscore_threshold)}:}{ ~~ }
     \item{\code{get_homologs(string_ids, target_species_id, bitscore_threshold)}:}{ ~~ }
     \item{\code{get_graph()}:}{ ~~ }
     \item{\code{get_enrichment(string_ids, category, methodMT, iea)}:}{ ~~ }
+    \item{\code{get_geneset_description(string_ids, caller_identity="STRINGdb-package")}:}{ ~~ }
     \item{\code{get_clusters(string_ids, algorithm)}:}{ ~~ }
     \item{\code{get_annotations_desc()}:}{ ~~ }
     \item{\code{get_annotations()}:}{ ~~ }
