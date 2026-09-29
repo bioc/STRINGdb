@@ -1,8 +1,8 @@
 test_regulatory_network <- function() {
 
-  checkTrue(!is_regulatory_network_version_supported("12.0"))
-  checkTrue(!is_regulatory_network_version_supported("11.0b"))
-  checkTrue(is_regulatory_network_version_supported("12.5"))
+  checkTrue(!STRINGdb:::is_regulatory_network_version_supported("12.0"))
+  checkTrue(!STRINGdb:::is_regulatory_network_version_supported("11.0b"))
+  checkTrue(STRINGdb:::is_regulatory_network_version_supported("12.5"))
 
   string_db <- STRINGdb$new(
     version = "12.5", species = 9606, score_threshold = 400,
@@ -26,7 +26,7 @@ test_regulatory_network <- function() {
     directed = TRUE
   )
 
-  checkTrue(is_igraph_directed(string_db$graph))
+  checkTrue(STRINGdb:::is_igraph_directed(string_db$graph))
   checkTrue(identical(sort(unname(string_db$get_neighbors("9606.A", mode = "out"))), "9606.B"))
   checkTrue(identical(sort(unname(string_db$get_neighbors("9606.A", mode = "in"))), "9606.C"))
 
