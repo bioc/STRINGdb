@@ -417,7 +417,9 @@ Author(s):
     #########################################
 
 
-    get_enrichment = function(string_ids, category = "All", methodMT = NULL, iea = NULL, minScore = NULL) {
+    get_enrichment = function(string_ids, category = "All", methodMT = NULL, iea = NULL, minScore = NULL,
+                              max_fdr = NULL, min_gene_count = NULL, min_strength = NULL, min_signal = NULL,
+                              merge_similarity = NULL) {
       '
 Description:
   Returns the enrichment for various annotation categories (among others Gene Ontology, KEGG, domains, Reference Publications) for a vector of STRING proteins.
@@ -425,6 +427,14 @@ Description:
 Input parameters:
   "string_ids"    a vector of STRING identifiers.
   "category" enrichment term category (All, Process, Component, Function, Keyword, KEGG, RCTM, Pfam, SMART, InterPro), default:ALL
+  Optional filters of the terms, applied by STRING as on the enrichment table of its website (default NULL: no filter).
+  They need STRING version 12.5 or later; with an older version they are not used, with a warning:
+  "max_fdr"           highest FDR of a term (above 0, at most 1)
+  "min_gene_count"    lowest number of input proteins annotated with a term (a whole number, at least 1)
+  "min_strength"      lowest strength of a term, log10(observed / expected)
+  "min_signal"        lowest signal of a term, STRING\'s balance of strength and FDR
+  "merge_similarity"  merges terms whose protein sets overlap at least this much (above 0, at most 1)
+                      into the most significant of them
 
 Author(s):
    Andrea Franceschini
@@ -441,6 +451,9 @@ Author(s):
       if (!(is.null(minScore))) {
         warning("minScore parameter is deprecated.")
       }
+
+      filter_params <- normalize_enrichment_filters(max_fdr, min_gene_count, min_strength, min_signal, merge_similarity)
+      filter_params <- options_supported_by_version(filter_params, version, "The enrichment filters")
 
 
       urlStr <- paste(stable_url, "/api/tsv/enrichment?", sep = "")
@@ -465,6 +478,8 @@ Author(s):
 
         params <- list(species = species, identifiers = identifiers, background_string_identifiers = background)
       }
+
+      params <- c(params, filter_params)
 
       tempDfv <- postFormSmart(urlStr, .params = params)
 
@@ -543,7 +558,14 @@ Author(s):
                                      color_palette = "mint_blue",
                                      number_of_term_shown = NULL,
                                      x_axis = "signal",
-                                     caller_identity = "STRINGdb-package") {
+                                     caller_identity = "STRINGdb-package",
+                                     graph_type = "dotplot",
+                                     sort_by = NULL,
+                                     max_fdr = NULL,
+                                     min_gene_count = NULL,
+                                     min_strength = NULL,
+                                     min_signal = NULL,
+                                     merge_similarity = NULL) {
       '
 Description:
   Returns a STRING enrichment figure for the given identifiers and category.
@@ -555,9 +577,16 @@ Input parameters:
   "output_format"          image format returned by STRING ("image", "highres_image" or "svg")
   "group_by_similarity"    threshold for grouping related terms on the plot (from 0.1 to 1)
   "color_palette"          color palette used to represent FDR values
-  "number_of_term_shown"   maximum number of terms shown on the plot
+  "number_of_term_shown"   maximum number of terms shown on the plot (STRING shows at most 100)
   "x_axis"                 variable used on the x-axis ("signal", "strength", "FDR" or "gene_count")
   "caller_identity"        caller identifier sent to STRING
+  "graph_type"             "dotplot" (default) or "barplot"
+  "sort_by"                variable that decides which terms are shown and in which order
+                           ("signal", "strength", "FDR" or "gene_count"; default NULL: the x_axis variable)
+  "max_fdr", "min_gene_count", "min_strength", "min_signal", "merge_similarity"
+                           optional filters of the terms, as in get_enrichment (default NULL: no filter)
+  graph_type, sort_by and the filters need STRING version 12.5 or later; with an older version they are not used,
+  with a warning.
 
 Author(s):
    Damian Szklarczyk
@@ -597,6 +626,23 @@ Author(s):
         stop()
       }
 
+      valid_graph_types <- c("dotplot", "barplot")
+      if (!(length(graph_type) == 1 && graph_type %in% valid_graph_types)) {
+        cat("ERROR: graph_type should be one of: ", paste(valid_graph_types, collapse = ", "), ".\n", sep = "")
+        stop()
+      }
+
+      # the sort variables are those of the x-axis; without sort_by, STRING sorts by the x_axis variable
+
+      if (!is.null(sort_by)) {
+        if (!(length(sort_by) == 1 && sort_by %in% valid_x_axes)) {
+          cat("ERROR: sort_by should be one of: ", paste(valid_x_axes, collapse = ", "), ".\n", sep = "")
+          stop()
+        }
+      }
+
+      filter_params <- normalize_enrichment_filters(max_fdr, min_gene_count, min_strength, min_signal, merge_similarity)
+
       if (!is.null(group_by_similarity)) {
         if (!(is.numeric(group_by_similarity) && length(group_by_similarity) == 1 && !is.na(group_by_similarity) &&
           group_by_similarity >= 0.1 && group_by_similarity <= 1)) {
@@ -627,6 +673,16 @@ Author(s):
         x_axis = x_axis,
         caller_identity = caller_identity
       )
+
+      # graph_type, sort_by and the filters are options of STRING 12.5 (options_supported_by_version). "dotplot" is
+      # STRING's default graph type and is not sent, so that a call without these options asks what it asked before.
+
+      figure_options <- filter_params
+      figure_options$graph_type <- if (graph_type == "dotplot") NULL else graph_type
+      figure_options$sort_by <- sort_by
+      figure_options <- options_supported_by_version(figure_options, version, "graph_type, sort_by and the enrichment filters")
+
+      params <- c(params, figure_options)
       params <- drop_null_params(params)
 
       params <- lapply(params, function(x) {
@@ -636,6 +692,12 @@ Author(s):
         return(x)
       })
       response <- POST(url = urlStr, body = params, encode = "form")
+
+      # a failed or refused request stops with STRING's explanation, instead of reading its error answer as a PNG
+      # or returning it as the SVG
+
+      stop_on_server_error(response, urlStr)
+      stop_on_client_error(response, urlStr)
 
       if (output_format == "svg") {
         img <- content(response, as = "text", encoding = "UTF-8")
@@ -666,6 +728,10 @@ Author(s):
       '
 Description:
   Plots an image of the STRING network with the given proteins.
+  A network of more than 1,000 proteins is drawn simplified, as on the STRING website:
+  with confidence edges and without structure pictures in the nodes. STRING draws the picture
+  (a PNG) for at most 150,000 interactions; for a larger network the method stops with
+  STRING\'s explanation: use a higher required_score, or get_png with output_format="svg".
 
 Input parameters:
   "string_ids"        a vector of STRING identifiers
@@ -809,10 +875,20 @@ Author(s):
                        caller_identity = "STRINGdb-package",
                        typed_physical_edges = NULL,
                        typed_regulatory_edges = NULL,
-                       show_regulatory_signs = NULL) {
+                       show_regulatory_signs = NULL,
+                       network_clustering_algorithm = NULL,
+                       network_clustering_parameter = NULL,
+                       cluster_aware_layout = NULL,
+                       network_clustering_edge_visibility = NULL,
+                       show_cluster_names = NULL,
+                       cluster_name_size = NULL) {
       '
 Description:
   Returns a STRING protein network image with the given identifiers.
+  A network of more than 1,000 proteins is drawn simplified, as on the STRING website:
+  with confidence edges and without structure pictures in the nodes. STRING draws
+  a PNG ("image", "highres_image") of at most 150,000 interactions; for a larger network
+  the method stops with STRING\'s explanation: ask for the SVG, or use a higher required_score.
 
 Input parameters:
   "string_ids"        a vector of STRING identifiers. Can be omitted when network_term_id is provided.
@@ -834,6 +910,15 @@ Input parameters:
   "typed_physical_edges"  include physical edges in the typed network view (TRUE/FALSE or 0/1)
   "typed_regulatory_edges"  include regulatory edges in the typed network view (TRUE/FALSE or 0/1)
   "show_regulatory_signs"  show positive/negative regulatory signs in the typed network view (TRUE/FALSE or 0/1)
+  "network_clustering_algorithm"  clusters the network and colours the proteins by cluster, as the Clusters tab
+                      of the STRING website: "kmeans", "mcl" or "leiden" (default NULL: no clustering)
+  "network_clustering_parameter"  k-means: the number of clusters (a whole number, default 3);
+                      MCL: the inflation (from 1.1 to 10, default 3); Leiden: the resolution (from 0.1 to 10, default 1)
+  "cluster_aware_layout"  lays the network out by its clusters (TRUE/FALSE or 0/1)
+  "network_clustering_edge_visibility"  edges between clusters: "faded" (default), "dotted", "solid" or "noshow"
+  "show_cluster_names"  writes the names of the clusters on the picture (TRUE/FALSE or 0/1, default FALSE)
+  "cluster_name_size"  size of the cluster names: 1, 1.5, 2, 2.5, 3, 3.5, 4, 5 or 6 (default: the size that suits the picture)
+  The clustering options need STRING version 12.5 or later; with an older version they are not used, with a warning.
 Author(s):
    Andrea Franceschini
 '
@@ -877,6 +962,12 @@ Author(s):
         custom_label_font_size <- as.integer(custom_label_font_size)
       }
 
+      clustering_params <- normalize_network_clustering(
+        network_clustering_algorithm, network_clustering_parameter, cluster_aware_layout,
+        network_clustering_edge_visibility, show_cluster_names, cluster_name_size
+      )
+      clustering_params <- options_supported_by_version(clustering_params, version, "The clustering options")
+
       identifiers <- collapse_string_identifiers(string_ids)
       urlStr <- paste(stable_url, "/api/", output_format, "/network", sep = "")
       params <- list(
@@ -899,13 +990,17 @@ Author(s):
       )
 
       if (!is.null(payload_id)) params["internal_payload_id"] <- payload_id
+      params <- c(params, clustering_params)
       params <- drop_null_params(params)
 
+      # a refused request (e.g. a PNG of more than 150,000 interactions) stops with STRING's explanation,
+      # instead of reading STRING's error answer as a PNG or returning it as the SVG
+
       if (output_format == "svg") {
-        img <- postFormSmart(urlStr, .params = params, .ctype = "text")
+        img <- postFormSmart(urlStr, .params = params, .ctype = "text", .stop_on_client_error = TRUE)
         if (!is.null(file)) cat(img, file = file)
       } else {
-        img <- readPNG(postFormSmart(urlStr, .params = params, .ctype = "raw"))
+        img <- readPNG(postFormSmart(urlStr, .params = params, .ctype = "raw", .stop_on_client_error = TRUE))
         if (!is.null(file)) writePNG(img, file)
       }
 

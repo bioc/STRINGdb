@@ -58,8 +58,8 @@ showClass("STRINGdb")
     \item{\code{get_ppi_enrichment_full(string_ids, sliceWindow, edgeWindow, windowExtendedReferenceThreshold, growingWindowLimit)}:}{ ~~ }
     \item{\code{get_ppi_enrichment(string_ids)}:}{ ~~ }
     \item{\code{get_proteins()}:}{ ~~ }
-    \item{\code{get_enrichment_figure(string_ids, category="Process", file, output_format="image", group_by_similarity, color_palette="mint_blue", number_of_term_shown, x_axis="signal", caller_identity="STRINGdb-package")}:}{ ~~ }
-    \item{\code{get_png(string_ids, required_score, network_flavor, file, payload_id, output_format, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity, typed_physical_edges, typed_regulatory_edges, show_regulatory_signs)}:}{ ~~ }
+    \item{\code{get_enrichment_figure(string_ids, category="Process", file, output_format="image", group_by_similarity, color_palette="mint_blue", number_of_term_shown, x_axis="signal", caller_identity="STRINGdb-package", graph_type="dotplot", sort_by, max_fdr, min_gene_count, min_strength, min_signal, merge_similarity)}:}{ ~~ }
+    \item{\code{get_png(string_ids, required_score, network_flavor, file, payload_id, output_format, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity, typed_physical_edges, typed_regulatory_edges, show_regulatory_signs, network_clustering_algorithm, network_clustering_parameter, cluster_aware_layout, network_clustering_edge_visibility, show_cluster_names, cluster_name_size)}:}{ ~~ }
     \item{\code{get_neighbors(string_ids, mode="all")}:}{ ~~ }
     \item{\code{get_interaction_partners(string_ids, required_score, limit)}:}{ ~~ }
     \item{\code{get_link(string_ids, required_score, network_flavor, payload_id, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity, typed_physical_edges, typed_regulatory_edges, show_regulatory_signs)}:}{ ~~ }
@@ -67,7 +67,7 @@ showClass("STRINGdb")
     \item{\code{get_homologs_besthits(string_ids, symbets, target_species_id, bitscore_threshold)}:}{ ~~ }
     \item{\code{get_homologs(string_ids, target_species_id, bitscore_threshold)}:}{ ~~ }
     \item{\code{get_graph()}:}{ ~~ }
-    \item{\code{get_enrichment(string_ids, category, methodMT, iea)}:}{ ~~ }
+    \item{\code{get_enrichment(string_ids, category, methodMT, iea, minScore, max_fdr, min_gene_count, min_strength, min_signal, merge_similarity)}:}{ ~~ }
     \item{\code{get_geneset_description(string_ids, caller_identity="STRINGdb-package")}:}{ ~~ }
     \item{\code{get_clusters(string_ids, algorithm)}:}{ ~~ }
     \item{\code{get_annotations_desc()}:}{ ~~ }

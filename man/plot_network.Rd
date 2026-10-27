@@ -39,6 +39,11 @@ include regulatory edges in the typed network view. Available only with \code{ne
 show positive/negative regulatory signs in the typed network view. Requires \code{typed_regulatory_edges=TRUE}. Accepts \code{TRUE}/\code{FALSE} or \code{0}/\code{1}.
 }
 }
+\details{
+A network of more than 1,000 proteins is drawn simplified, as on the STRING website: with confidence edges (whatever \code{network_flavor} says) and without structure pictures in the nodes.
+
+The picture is a PNG, which STRING draws for at most 150,000 interactions. For a larger network the method stops with STRING's explanation: use a higher \code{required_score}, or \code{get_png} with \code{output_format="svg"}.
+}
 \author{
 Andrea Franceschini
 }
