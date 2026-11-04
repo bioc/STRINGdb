@@ -82,7 +82,9 @@ Author(s):
       '
 Description:
     Initiliazes STRING with a given version and species.
-    Checks the current version against the API and sets the "take_first" parameter.
+    A version known to the package (KNOWN_STRING_VERSIONS) is used without a request to STRING, so that
+    the object can also be created offline. Without a version, STRING is asked for its current version
+    (the newest known version is used when STRING cannot be reached); an unknown version is looked up on STRING.
 
 Author(s):
    Andrea Franceschini
@@ -131,28 +133,13 @@ Author(s):
       }
 
 
-      curr_version_table <- read.table(url(paste(protocol, "://string-db.org/api/tsv-no-header/version", sep = "")), colClasses = "character")
-      curr_version <- curr_version_table$V1[1]
+      # A version known to the package takes its stable address from KNOWN_STRING_VERSIONS, without a
+      # request to STRING, so that the object can also be created offline. string-db.org is asked only
+      # without a version (for its current one) or for a version that the package does not know; see
+      # resolve_string_version.
 
-      if (length(version) == 0) {
-        cat("WARNING: You didn't specify a version of the STRING database to use. Hence we will use STRING ", curr_version, "\n")
-        version <<- curr_version
-      } else {
-        if (!(grepl("\\.", version))) {
-          version <<- paste(version, ".0", sep = "")
-        }
-      }
-
-      version_available_table <- read.table(url(paste(protocol, "://string-db.org/api/tsv-no-header/available_api_versions", sep = "")), colClasses = "character")
-
-      valid_versions <- version_available_table$V1
-
-      if (!(version %in% valid_versions)) {
-        cat("ERROR: specified version", version, " is not valid. \n")
-        cat("Available versions:\n")
-        print(valid_versions)
-        stop()
-      }
+      resolved_version <- resolve_string_version(version, protocol)
+      version <<- resolved_version$version
 
       if (is_regulatory_network(network_type) &&
           !is_regulatory_network_version_supported(version)) {
@@ -164,7 +151,7 @@ Author(s):
         file_version <<- "11.0"
       }
 
-      stable_url <<- subset(version_available_table, V1 == version)$V2
+      stable_url <<- resolved_version$stable_url
 
       if (tolower(protocol) == "http") {
         stable_url <<- gsub("https:", "http:", stable_url)

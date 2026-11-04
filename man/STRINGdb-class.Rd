@@ -36,7 +36,7 @@ showClass("STRINGdb")
     \item{\code{proteins}:}{Object of class \code{data.frame} ~~ }
     \item{\code{speciesList}:}{Object of class \code{data.frame} ~~ }
     \item{\code{species}:}{Object of class \code{numeric} ~~ }
-    \item{\code{version}:}{Object of class \code{character} ~~ }
+    \item{\code{version}:}{Object of class \code{character}. The STRING version, e.g. \code{"12.5"}; a version without a dot gets \code{".0"} (\code{"11"} means \code{"11.0"}). For the versions known to the package (11.0, 11.0b, 11.5, 12.0 and 12.5) the object is created without a request to STRING, so it can also be created offline. Without a version, STRING is asked for its current version; when STRING cannot be reached within a few seconds, the newest known version is used and a warning is printed. Any other version is looked up on STRING, and creating the object stops with an error when that version is not available or STRING cannot be reached. ~~ }
     \item{\code{network_type}:}{Object of class \code{character}. One of \code{"full"}, \code{"physical"}, or \code{"regulatory"}. The regulatory network requires STRING v12.5 or later. ~~ }
     \item{\code{link_data}:}{Object of class \code{character}. One of \code{"combined_only"}, \code{"detailed"}, or \code{"full"}. ~~ }
     \item{\code{input_directory}:}{Object of class \code{character} ~~ }
