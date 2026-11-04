@@ -301,6 +301,179 @@ is_regulatory_network_version_supported <- function(version) {
 }
 
 
+# The STRING versions known to this release of the package, oldest first, with
+# their stable (version-specific) addresses as STRING's API method
+# available_api_versions lists them. The constructor takes a known version's
+# address from this table instead of asking string-db.org, so that a STRINGdb
+# object for a known version is created without any request to STRING: offline,
+# and when string-db.org cannot be reached (the Bioconductor build machines
+# failed with SSL errors on these requests). A version missing from the table,
+# such as one released after this package, is still looked up on
+# string-db.org. Add each new STRING version as the last row.
+KNOWN_STRING_VERSIONS <- data.frame(
+  version = c("11.0", "11.0b", "11.5", "12.0", "12.5"),
+  stable_url = c(
+    "https://version-11-0.string-db.org",
+    "https://version-11-0b.string-db.org",
+    "https://version-11-5.string-db.org",
+    "https://version-12-0.string-db.org",
+    "https://version-12-5.string-db.org"
+  ),
+  stringsAsFactors = FALSE
+)
+
+
+# Seconds that the constructor waits for string-db.org when it has to ask for
+# the current STRING version, or for a version that the package does not know.
+STRING_VERSION_REQUEST_TIMEOUT <- 5
+
+
+# Reads a version table of the STRING API in the tsv-no-header format: one line
+# per version, the version and its stable address separated by a tab, e.g.
+# "12.5<TAB>https://version-12-5.string-db.org". Returns a data frame with the
+# columns version and stable_url, or NULL when the text is not such a table
+# (for example an HTML error page).
+parse_string_version_table <- function(body_text) {
+  if (is.null(body_text) || length(body_text) != 1 || is.na(body_text)) {
+    return(NULL)
+  }
+
+  lines <- strsplit(body_text, "\r?\n")[[1]]
+  lines <- lines[nchar(trimws(lines)) > 0]
+  if (length(lines) == 0) {
+    return(NULL)
+  }
+
+  fields <- strsplit(lines, "\t", fixed = TRUE)
+  if (any(lengths(fields) < 2)) {
+    return(NULL)
+  }
+
+  versions <- trimws(vapply(fields, function(line_fields) line_fields[1], character(1)))
+  stable_urls <- trimws(vapply(fields, function(line_fields) line_fields[2], character(1)))
+
+  looks_like_versions <- all(grepl("^[0-9]+\\.[0-9]+[a-z]?$", versions))
+  looks_like_addresses <- all(grepl("^https?://", stable_urls))
+  if (!looks_like_versions || !looks_like_addresses) {
+    return(NULL)
+  }
+
+  return(data.frame(version = versions, stable_url = stable_urls, stringsAsFactors = FALSE))
+}
+
+
+# Asks string-db.org for one of its version tables: "version" (the current
+# STRING version) or "available_api_versions" (all versions that the API
+# serves). Returns a data frame with the columns version and stable_url, or
+# NULL when STRING cannot be reached within timeout_seconds or does not answer
+# with such a table: an SSL or connection error, a timeout, an HTTP error
+# status, or an error page.
+fetch_string_version_table <- function(method, protocol = "https",
+                                       timeout_seconds = STRING_VERSION_REQUEST_TIMEOUT) {
+  url_str <- paste(protocol, "://string-db.org/api/tsv-no-header/", method, sep = "")
+
+  response <- tryCatch(
+    GET(url_str, config = timeout(timeout_seconds), query = list(caller_identity = "STRINGdb-package")),
+    error = function(e) NULL
+  )
+  if (is.null(response) || status_code(response) != 200) {
+    return(NULL)
+  }
+
+  body_text <- tryCatch(
+    content(response, as = "text", encoding = "UTF-8"),
+    error = function(e) NULL
+  )
+  return(parse_string_version_table(body_text))
+}
+
+
+# Decides the STRING version of a STRINGdb object and its stable address (the
+# constructor changes the address to http when protocol is "http"). Returns a
+# list with the elements version and stable_url.
+#   version              the version asked for; character(0) when none was
+#                        given. A version without a dot gets ".0" ("11"
+#                        becomes "11.0"), as before.
+#   protocol             "https" or "http", for the requests to string-db.org
+#   fetch_version_table  the function that asks string-db.org for a version
+#                        table (fetch_string_version_table); an argument so
+#                        that the unit tests can replace the request
+# A known version (KNOWN_STRING_VERSIONS) needs no request. Without a version,
+# string-db.org is asked for its current version, as before; when STRING cannot
+# be reached, the newest known version is used and a WARNING is printed. A
+# version that the package does not know is looked up among the versions that
+# string-db.org serves, and the function stops when it is not among them or
+# when STRING cannot be reached to check it.
+resolve_string_version <- function(version, protocol = "https",
+                                   fetch_version_table = fetch_string_version_table) {
+  known_versions <- KNOWN_STRING_VERSIONS
+
+  if (length(version) == 0) {
+    current_version_table <- fetch_version_table("version", protocol)
+
+    if (is.null(current_version_table)) {
+      newest_known_version <- known_versions$version[nrow(known_versions)]
+      cat(
+        "WARNING: You didn't specify a version of the STRING database to use, and STRING could not be reached ",
+        "to look up its current version. Hence we will use STRING ", newest_known_version,
+        ", the newest version known to this package.\n",
+        sep = ""
+      )
+      return(list(
+        version = newest_known_version,
+        stable_url = known_versions$stable_url[nrow(known_versions)]
+      ))
+    }
+
+    current_version <- current_version_table$version[1]
+    cat("WARNING: You didn't specify a version of the STRING database to use. Hence we will use STRING ", current_version, "\n")
+
+    # a current version released after this package takes its address from STRING's answer
+    if (current_version %in% known_versions$version) {
+      current_stable_url <- known_versions$stable_url[known_versions$version == current_version]
+    } else {
+      current_stable_url <- current_version_table$stable_url[1]
+    }
+    return(list(version = current_version, stable_url = current_stable_url))
+  }
+
+  if (!(grepl("\\.", version))) {
+    version <- paste(version, ".0", sep = "")
+  }
+
+  if (version %in% known_versions$version) {
+    return(list(
+      version = version,
+      stable_url = known_versions$stable_url[known_versions$version == version]
+    ))
+  }
+
+  available_versions_table <- fetch_version_table("available_api_versions", protocol)
+
+  if (is.null(available_versions_table)) {
+    stop(
+      "ERROR: STRING version ", version, " is not known to this version of the STRINGdb package, and ",
+      "string-db.org could not be reached to check whether it is available. Versions known to the package: ",
+      paste(known_versions$version, collapse = ", "), ".",
+      call. = FALSE
+    )
+  }
+
+  if (!(version %in% available_versions_table$version)) {
+    stop(
+      "ERROR: specified version ", version, " is not valid. Available versions: ",
+      paste(available_versions_table$version, collapse = ", "), ".",
+      call. = FALSE
+    )
+  }
+
+  return(list(
+    version = version,
+    stable_url = available_versions_table$stable_url[available_versions_table$version == version][1]
+  ))
+}
+
+
 normalize_network_flavor <- function(value, network_type) {
   if (length(value) != 1 || is.na(value)) {
     stop("ERROR: network_flavor should be one of: 'evidence', 'confidence' or 'typed'.")
