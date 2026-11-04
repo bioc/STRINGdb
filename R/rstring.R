@@ -762,13 +762,15 @@ Author(s):
     #########################################
 
 
-    get_summary = function(string_ids, required_score) {
+    get_summary = function(string_ids, required_score = NULL) {
       '
 Description:
   Returns a summary of the STRING sub-network containing the identifiers provided in input.
 
 Input parameters:
   "string_ids"      a vector of STRING identifiers.
+  "required_score"  minimum STRING combined score of the interactions
+                      (default NULL: the score_threshold of the object, as in ppi_enrichment)
 
 Author(s):
    Andrea Franceschini
@@ -1060,8 +1062,10 @@ Author(s):
       if (!is.null(comments)) postFormParams <- c(postFormParams, list(comments = paste(comments, collapse = "____")))
       if (!is.null(links)) postFormParams <- c(postFormParams, list(links = paste(links, collapse = " ")))
       if (!is.null(iframe_urls)) postFormParams <- c(postFormParams, list(iframe_urls = paste(iframe_urls, collapse = " ")))
-      if (!is.null(logo_imgF)) postFormParams <- c(postFormParams, list(logo_img = fileUpload(logo_imgF)))
-      if (!is.null(legend_imgF)) postFormParams <- c(postFormParams, list(legend_img = fileUpload(legend_imgF)))
+      # the images are sent as files of the multipart form (httr's upload_file; fileUpload was RCurl's,
+      # which the package no longer imports, so these two options stopped with an error)
+      if (!is.null(logo_imgF)) postFormParams <- c(postFormParams, list(logo_img = upload_file(logo_imgF)))
+      if (!is.null(legend_imgF)) postFormParams <- c(postFormParams, list(legend_img = upload_file(legend_imgF)))
 
       postRs <- postFormSmart(paste(stable_url, "/cgi/webservices/post_payload.pl", sep = ""), .params = postFormParams)
 

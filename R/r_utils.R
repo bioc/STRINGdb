@@ -158,7 +158,23 @@ PREFERRED_ALIAS_SOURCES <- c(
 )
 
 
+# Normalizes identifiers and aliases for the case-insensitive mapping: the text
+# is read as Windows-1252 and upper-cased, as before. Bytes that Windows-1252
+# does not define (0x81, 0x8D, 0x8F, 0x90 and 0x9D, which occur in UTF-8
+# characters such as the hyphen U+2010 of "spine-associated RapGAP 3") are kept
+# as byte codes ("<90>"); iconv() otherwise turns the whole text into NA, and
+# merge() then matched those aliases to every NA identifier. NA stays NA.
+normalize_alias_key <- function(x) {
+  return(toupper(iconv(x, "WINDOWS-1252", "UTF-8", sub = "byte")))
+}
+
+
 prioritize_aliases_by_source <- function(aliasDf) {
+  # an NA alias (read.table reads the alias "NA" as NA) can never match an
+  # identifier; left out, it cannot match the NA identifiers of match() or
+  # merge() either, in map() or in code that uses get_aliases()
+  aliasDf <- aliasDf[!is.na(aliasDf$alias), , drop = FALSE]
+
   if (nrow(aliasDf) == 0) {
     return(aliasDf)
   }
@@ -166,7 +182,7 @@ prioritize_aliases_by_source <- function(aliasDf) {
   rank_lookup <- seq_along(PREFERRED_ALIAS_SOURCES)
   names(rank_lookup) <- PREFERRED_ALIAS_SOURCES
 
-  aliasDf$alias_normalized <- toupper(iconv(aliasDf$alias, "WINDOWS-1252", "UTF-8"))
+  aliasDf$alias_normalized <- normalize_alias_key(aliasDf$alias)
   ambiguous <- duplicated(aliasDf$alias_normalized) | duplicated(aliasDf$alias_normalized, fromLast = TRUE)
 
   if (!any(ambiguous)) {
@@ -796,16 +812,40 @@ merge.with.order <- function(x, y, ..., sort = T) {
 
 
 # mapping function (add the possibility to map using more than one column)
+# The identifiers are compared in upper case (unless caseSensitive), and an NA
+# or empty identifier never maps. Every result row keeps the identifiers of its
+# own input row, also when a later column mapped it or when it maps to several
+# targets, and the rows keep the order of dfToMap (a row that maps to several
+# targets is repeated in place). As before, the first column of strColsFrom
+# comes first in the result, followed by the other columns of dfToMap and then
+# by strColToDfMap.
 multi_map_df <- function(dfToMap, dfMap, strColsFrom, strColFromDfMap, strColToDfMap, caseSensitive = FALSE) {
-  tempMatr <- matrix(NA, length(strColsFrom), nrow(dfToMap))
-  for (i in 1:length(strColsFrom)) {
+  # merge() reorders and repeats rows, so every row carries the number of its
+  # input row: the identifiers are restored, and the rows ordered, by it
+  input_row_col <- "input_row..."
+  dfToMap[[input_row_col]] <- seq_len(nrow(dfToMap))
+
+  # merge() matches NA to NA and "" to "", so an NA or empty identifier is given
+  # a key that no alias has, and stays unmapped. The aliases are left as they
+  # are: the rows of an identifier with several targets keep the order of before.
+  unmappable_key <- "\001no identifier\001"
+
+  original_ids <- list()
+  for (i in seq_along(strColsFrom)) {
+    original_ids[[i]] <- dfToMap[, strColsFrom[i]]
     if (!caseSensitive) {
-      tempMatr[i, ] <- as.vector(dfToMap[, strColsFrom[i]])
-      dfToMap[, strColsFrom[i]] <- toupper(iconv(dfToMap[, strColsFrom[i]], "WINDOWS-1252", "UTF-8"))
+      original_ids[[i]] <- as.vector(original_ids[[i]])
+      dfToMap[, strColsFrom[i]] <- normalize_alias_key(dfToMap[, strColsFrom[i]])
+    }
+
+    missing_ids <- is.na(dfToMap[, strColsFrom[i]]) | dfToMap[, strColsFrom[i]] == ""
+    if (any(missing_ids)) {
+      dfToMap[, strColsFrom[i]] <- as.character(dfToMap[, strColsFrom[i]])
+      dfToMap[missing_ids, strColsFrom[i]] <- unmappable_key
     }
   }
   if (!caseSensitive) {
-    dfMap[, strColFromDfMap] <- toupper(iconv(dfMap[, strColFromDfMap], "WINDOWS-1252", "UTF-8"))
+    dfMap[, strColFromDfMap] <- normalize_alias_key(dfMap[, strColFromDfMap])
   }
 
   dfMap2 <- unique(subset(dfMap, select = c(strColFromDfMap, strColToDfMap)))
@@ -819,9 +859,14 @@ multi_map_df <- function(dfToMap, dfMap, strColsFrom, strColFromDfMap, strColToD
     }
   }
 
-  for (i in 1:length(strColsFrom)) {
-    if (!caseSensitive && length(tempMatr[i, ]) == length(df2[, strColsFrom[i]])) df2[, strColsFrom[i]] <- tempMatr[i, ]
+  # every row gets back the identifiers of its own input row, as given (not
+  # upper-cased, and without the key of the NA and empty identifiers)
+  for (i in seq_along(strColsFrom)) {
+    df2[, strColsFrom[i]] <- original_ids[[i]][df2[[input_row_col]]]
   }
+
+  df2 <- df2[order(df2[[input_row_col]]), , drop = FALSE]
+  df2[[input_row_col]] <- NULL
 
   return(df2)
 }

@@ -32,7 +32,10 @@ specify whether the mapping should be case sensitive
 }
 
 \value{
-data frame with an additional column containing the result of the mapping
+data frame with an additional column containing the result of the mapping.
+The first column of \code{strColsFrom} comes first, followed by the other columns of \code{dfToMap} and by the result column.
+An NA or empty identifier is never mapped. The rows keep the order of \code{dfToMap}, also when several columns are used,
+and each row keeps its own identifiers as given; a row whose identifier maps to several targets is repeated, once for each of them.
 }
 \author{
 Andrea Franceschini

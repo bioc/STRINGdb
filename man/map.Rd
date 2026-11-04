@@ -35,6 +35,10 @@ when \code{takeFirst=TRUE}, prioritize aliases using the preferred source order.
 }
 \value{
 Returns the dataframe that is given in input with the "STRING_id" additional column.
+The first column of \code{my_data_frame_id_col_names} comes first, followed by the other columns of the input and by "STRING_id".
+The identifiers are compared without regard to case. An NA or empty identifier is never mapped (its STRING_id is NA).
+The rows keep the order of the input, also when several identifier columns are used, and each row keeps its own identifiers as given;
+with \code{takeFirst=FALSE}, a row whose identifier matches several STRING proteins is repeated, once for each of them.
 }
 \author{
 Andrea Franceschini
