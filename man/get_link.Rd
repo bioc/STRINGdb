@@ -7,7 +7,7 @@ get_link
 Returns a short link to the network page of the STRING website that shows the protein interactions between the given identifiers.
 }
 \usage{
-\S4method{get_link}{STRINGdb}(string_ids=NULL, required_score=NULL, network_flavor="evidence", payload_id=NULL, network_term_id=NULL, hide_node_labels=NULL, hide_disconnected_nodes=NULL, block_structure_pics_in_bubbles=NULL, flat_node_design=TRUE, center_node_labels=NULL, custom_label_font_size=NULL, caller_identity="STRINGdb-package", typed_physical_edges=NULL, typed_regulatory_edges=NULL, show_regulatory_signs=NULL, add_color_nodes=NULL, add_white_nodes=NULL, show_query_node_labels=NULL, channels=NULL)
+\S4method{get_link}{STRINGdb}(string_ids=NULL, required_score=NULL, network_flavor="evidence", payload_id=NULL, network_term_id=NULL, hide_node_labels=NULL, hide_disconnected_nodes=NULL, block_structure_pics_in_bubbles=NULL, flat_node_design=TRUE, center_node_labels=NULL, custom_label_font_size=NULL, caller_identity=NULL, typed_physical_edges=NULL, typed_regulatory_edges=NULL, show_regulatory_signs=NULL, add_color_nodes=NULL, add_white_nodes=NULL, show_query_node_labels=NULL, channels=NULL)
 }
 \arguments{
   \item{string_ids}{
@@ -45,7 +45,7 @@ centers protein names on nodes. Accepts \code{TRUE}/\code{FALSE} or \code{0}/\co
 changes the font size of the protein names (from 5 to 50).
 }
   \item{caller_identity}{
-caller identifier sent to STRING.
+ignored, with a warning (once per R session): the package sends its own caller identity (\code{"STRINGdb-package"}) with every request to STRING. It is kept, with the default \code{NULL}, so that code written for earlier versions still runs, and will be removed in the next Bioconductor release, so do not specify it.
 }
   \item{typed_physical_edges}{
 include physical edges in the typed network view. Available only with \code{network_flavor="typed"}. Accepts \code{TRUE}/\code{FALSE} or \code{0}/\code{1}.
@@ -66,7 +66,7 @@ adds this many further interaction partners to the network, drawn white, after t
 labels the given proteins with the identifiers submitted in \code{string_ids} instead of their STRING names (with STRING identifiers, the labels are those identifiers, e.g. \code{9606.ENSP00000269305}). Accepts \code{TRUE}/\code{FALSE} or \code{0}/\code{1}; by default the STRING names are shown.
 }
   \item{channels}{
-the evidence channels used for the interactions: a character vector of one or more of \code{"neighborhood"}, \code{"fusion"}, \code{"cooccurrence"}, \code{"coexpression"}, \code{"experiments"}, \code{"databases"} and \code{"textmining"} (in any case). The default \code{NULL} uses all channels. STRING recomputes the combined score of each interaction from the selected channels, and \code{required_score} applies to the recomputed score.
+the evidence channels used for the interactions: a character vector of one or more of \code{"neighborhood"}, \code{"fusion"}, \code{"cooccurrence"}, \code{"coexpression"}, \code{"experiments"}, \code{"databases"} and \code{"textmining"} (in any case), or the column names of the interaction tables with \code{link_data = "detailed"}: \code{"cooccurence"}, \code{"experimental"} and \code{"database"}. The default \code{NULL} uses all channels. STRING recomputes the combined score of each interaction from the selected channels, and \code{required_score} applies to the recomputed score.
 }
 }
 \details{

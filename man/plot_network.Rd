@@ -48,7 +48,7 @@ adds this many further interaction partners to the network, drawn white, after t
 labels the given proteins with the identifiers submitted in \code{string_ids} instead of their STRING names (with STRING identifiers, the labels are those identifiers, e.g. \code{9606.ENSP00000269305}). Accepts \code{TRUE}/\code{FALSE} or \code{0}/\code{1}; by default the STRING names are shown.
 }
   \item{channels}{
-the evidence channels used for the interactions: a character vector of one or more of \code{"neighborhood"}, \code{"fusion"}, \code{"cooccurrence"}, \code{"coexpression"}, \code{"experiments"}, \code{"databases"} and \code{"textmining"} (in any case). The default \code{NULL} uses all channels. STRING recomputes the combined score of each interaction from the selected channels, and \code{required_score} applies to the recomputed score. Needs STRING version 12.0 or later; with an older version it is not used, with a warning.
+the evidence channels used for the interactions: a character vector of one or more of \code{"neighborhood"}, \code{"fusion"}, \code{"cooccurrence"}, \code{"coexpression"}, \code{"experiments"}, \code{"databases"} and \code{"textmining"} (in any case), or the column names of the interaction tables with \code{link_data = "detailed"}: \code{"cooccurence"}, \code{"experimental"} and \code{"database"}. The default \code{NULL} uses all channels. STRING recomputes the combined score of each interaction from the selected channels, and \code{required_score} applies to the recomputed score. Needs STRING version 12.0 or later; with an older version it is not used, with a warning.
 }
 }
 \details{

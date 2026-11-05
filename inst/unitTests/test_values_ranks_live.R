@@ -21,12 +21,18 @@ test_values_ranks_live <- function() {
     data(diff_exp_example1, package = "STRINGdb", envir = environment())
     mapped <- string_db$map(diff_exp_example1, "gene", removeUnmappedRows = TRUE, quiet = TRUE)
 
-    results <- string_db$get_values_ranks_enrichment(mapped$STRING_id, mapped$logFC, timeout = 1800, quiet = TRUE)
+    # the values alone, named by STRING identifiers
+    ranked <- setNames(mapped$logFC, mapped$STRING_id)
+    results <- string_db$get_values_ranks_enrichment(ranked, timeout = 1800, quiet = TRUE)
     checkEquals(STRINGdb:::VALUES_RANKS_RESULT_COLUMNS, colnames(results))
     checkTrue(nrow(results) > 0)
-    checkTrue(is.integer(results$genesMapped))
-    checkTrue(all(results$falseDiscoveryRate <= 0.01))
+    checkTrue(is.integer(results$number_of_genes))
+    checkTrue(all(results$fdr <= 0.05))
     checkTrue(all(results$direction %in% c("top", "bottom", "both ends")))
+    # the category codes of get_enrichment, and one value and rank for each protein of a term
+    checkTrue("Process" %in% results$category)
+    checkTrue(all(lengths(results$inputValues) == results$number_of_genes))
+    checkTrue(all(lengths(results$inputRanks) == results$number_of_genes))
     checkTrue(nchar(attr(results, "job_id")) > 0)
 
     # the finished job's results can be fetched again by its job_id

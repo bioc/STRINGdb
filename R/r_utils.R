@@ -114,10 +114,60 @@ stop_on_client_error <- function(res, uri) {
 }
 
 
+# The caller identity of the package. The request helpers (postFormSmart, post_string_json and
+# get_string_text, and the requests of fetch_string_version_table and get_enrichment_figure) add it
+# to every request to STRING's API, and downloadAbsentFile to the downloads of STRING's data files,
+# so that no method handles it. STRING logs it, and makes an API key requested by STRINGdb work at
+# once (other new keys work after a few minutes).
+PACKAGE_CALLER_IDENTITY <- "STRINGdb-package"
+
+
+# The parameters of a request to STRING, with the package's caller identity.
+with_caller_identity <- function(params) {
+  params <- as.list(params)
+  params$caller_identity <- PACKAGE_CALLER_IDENTITY
+  return(params)
+}
+
+# Whether the warning about an ignored caller_identity argument was given in this R session.
+caller_identity_warning <- new.env(parent = emptyenv())
+
+
+# get_png, get_link, get_enrichment_figure and get_geneset_description keep their caller_identity
+# argument (default NULL) until the next Bioconductor release, so that older code runs, but the
+# package sends its own caller identity. A given caller_identity gets a warning, once per R
+# session, so that a loop does not repeat it.
+warn_ignored_caller_identity <- function(caller_identity) {
+  if (is.null(caller_identity) || isTRUE(caller_identity_warning$given)) {
+    return(invisible(NULL))
+  }
+  caller_identity_warning$given <- TRUE
+  warning(
+    "The argument caller_identity is ignored: STRINGdb sends its own caller identity to STRING. ",
+    "It will be removed in the next Bioconductor release, so do not specify it.",
+    call. = FALSE
+  )
+  return(invisible(NULL))
+}
+
+
+# The address of a download from STRING's servers (string-db.org, stringdb-downloads.org), with the
+# package's caller identity after the parameters already in it. Other addresses are returned as
+# they are: downloadAbsentFile is exported, and another server may refuse an unknown parameter.
+url_with_caller_identity <- function(url_str) {
+  string_server <- "^https?://([^/]+\\.)?(string-db\\.org|stringdb-downloads\\.org)(:[0-9]+)?(/|$)"
+  if (!grepl(string_server, url_str)) {
+    return(url_str)
+  }
+  separator <- if (grepl("?", url_str, fixed = TRUE)) "&" else "?"
+  return(paste(url_str, separator, "caller_identity=", PACKAGE_CALLER_IDENTITY, sep = ""))
+}
+
+
 # .stop_on_client_error: also stop when STRING refused the request (HTTP status
 # 4xx), with STRING's explanation (see stop_on_client_error)
 postFormSmart <- function(uri, .params = list(), .opts = list(), .ctype = "text", .stop_on_client_error = FALSE) {
-  res <- POST(url = uri, body = .params, config = .opts)
+  res <- POST(url = uri, body = with_caller_identity(.params), config = .opts)
   stop_on_server_error(res, uri)
   if (.stop_on_client_error) {
     stop_on_client_error(res, uri)
@@ -416,7 +466,7 @@ fetch_string_version_table <- function(method, protocol = "https",
   url_str <- paste(protocol, "://string-db.org/api/tsv-no-header/", method, sep = "")
 
   response <- tryCatch(
-    GET(url_str, config = timeout(timeout_seconds), query = list(caller_identity = "STRINGdb-package")),
+    GET(url_str, config = timeout(timeout_seconds), query = with_caller_identity(list())),
     error = function(e) NULL
   )
   if (is.null(response) || status_code(response) != 200) {
@@ -769,6 +819,15 @@ STRING_EVIDENCE_CHANNELS <- c(
   textmining = "channel7"
 )
 
+# The names of the channels as the columns of the interaction tables with
+# link_data = "detailed" (the column names of STRING's download files), which the
+# channels option takes too.
+STRING_EVIDENCE_CHANNEL_ALIASES <- c(
+  cooccurence = "cooccurrence",
+  experimental = "experiments",
+  database = "databases"
+)
+
 
 # Checks the evidence channels of a network picture or link and returns them as
 # STRING API parameters; an empty list without channels (NULL), for which
@@ -776,7 +835,8 @@ STRING_EVIDENCE_CHANNELS <- c(
 # each interaction from the selected channels and applies required_score to the
 # recomputed score.
 #   channels  a character vector of channel names (names(STRING_EVIDENCE_CHANNELS),
-#             in any case); a name given more than once counts once
+#             or the column names of STRING_EVIDENCE_CHANNEL_ALIASES, in any case);
+#             a name given more than once counts once
 # When any channel parameter is sent, STRING turns off the channels that are
 # not sent, so all seven are sent: "on" for the selected channels and "off" for
 # the others.
@@ -799,16 +859,22 @@ normalize_evidence_channels <- function(channels = NULL) {
     )
   }
 
-  is_known_channel <- tolower(channels) %in% channel_names
+  # a column name of the detailed interaction tables stands for its channel
+  lower_case_channels <- tolower(channels)
+  is_alias <- lower_case_channels %in% names(STRING_EVIDENCE_CHANNEL_ALIASES)
+  lower_case_channels[is_alias] <- STRING_EVIDENCE_CHANNEL_ALIASES[lower_case_channels[is_alias]]
+
+  is_known_channel <- lower_case_channels %in% channel_names
   if (!all(is_known_channel)) {
     unknown_channels <- unique(channels[!is_known_channel])
     stop(
       "ERROR: unknown channels: ", paste("'", unknown_channels, "'", sep = "", collapse = ", "),
-      ". channels should be one or more of: ", valid_channels_text, "."
+      ". channels should be one or more of: ", valid_channels_text, " (or the column names of the detailed ",
+      "interaction tables: 'cooccurence', 'experimental', 'database')."
     )
   }
 
-  selected_channels <- unique(tolower(channels))
+  selected_channels <- unique(lower_case_channels)
 
   params <- list()
   for (channel_name in channel_names) {
@@ -936,7 +1002,10 @@ downloadAbsentFile <- function(urlStr, oD = tempdir()) {
     previousOptions <- options(timeout = max(300, getOption("timeout")))
     on.exit(options(previousOptions), add = TRUE)
 
-    downloadStatus <- download.file(urlStr, partialFile)
+    # the request carries the package's caller identity, and the file keeps the name of the address
+    # without it. mode = "wb": download.file chooses binary mode on Windows only for an address
+    # that ends in .gz (or another binary extension), which an address with parameters does not.
+    downloadStatus <- download.file(url_with_caller_identity(urlStr), partialFile, mode = "wb")
 
     # 0 is a finished download; the external methods ("wget" and "curl") return the non-zero exit
     # status of a failed download instead of stopping
@@ -1068,18 +1137,53 @@ renameColDf <- function(df, colOldName, colNewName) {
 # but a cutoff above 0.25 defeats the optimizations of the computation and can give huge results.
 VALUES_RANKS_MAX_FDR <- 0.25
 
-# The columns of the results (api/tsv/downloadenrichmentresults), for an answer without terms.
-VALUES_RANKS_RESULT_COLUMNS <- c(
+# The columns of STRING's results table (api/tsv/downloadenrichmentresults), as STRING writes them.
+VALUES_RANKS_STRING_COLUMNS <- c(
   "category", "termID", "termDescription", "genesMapped", "genesInSet",
   "enrichmentScore", "direction", "falseDiscoveryRate", "method", "proteinIDs",
   "proteinLabels", "proteinInputLabels", "proteinInputValues", "proteinRanks"
 )
 
+# The names that the package gives STRING's columns (names: STRING's), in the order of the results:
+# those of get_enrichment where a column means the same, so that code for its results also works for
+# these. proteinInputLabels is left out: the package submits STRING identifiers, which STRING gives
+# back there, as in proteinIDs.
+VALUES_RANKS_COLUMN_NAMES <- c(
+  category = "category", termID = "term", genesMapped = "number_of_genes",
+  genesInSet = "number_of_genes_in_background", proteinIDs = "inputGenes", proteinLabels = "preferredNames",
+  enrichmentScore = "enrichment_score", direction = "direction", method = "method",
+  falseDiscoveryRate = "fdr", termDescription = "description", proteinInputValues = "inputValues",
+  proteinRanks = "inputRanks"
+)
+
+# The columns of the results that the package returns (format_values_ranks_results).
+VALUES_RANKS_RESULT_COLUMNS <- unname(VALUES_RANKS_COLUMN_NAMES)
+
+# The category codes of get_enrichment for the category names of STRING's values/ranks results
+# (the inverse of shortNameOfEnrichmentCategory of STRING's server). "Monarch" stands for all
+# phenotype ontologies, whose code comes from the prefix of the term
+# (VALUES_RANKS_PHENOTYPE_PREFIXES).
+VALUES_RANKS_CATEGORY_CODES <- c(
+  "GO Process" = "Process", "GO Function" = "Function", "GO Component" = "Component",
+  "UniProt Keywords" = "Keyword", "KEGG" = "KEGG", "Reactome" = "RCTM", "GWAS" = "GWAS",
+  "Hallmark" = "Hallmark", "Pfam" = "Pfam", "SMART" = "SMART", "InterPro" = "InterPro",
+  "Publications" = "PMID", "STRING clusters" = "NetworkNeighborAL", "COMPARTMENTS" = "COMPARTMENTS",
+  "TISSUES" = "TISSUES", "DISEASES" = "DISEASES", "WikiPathways" = "WikiPathways"
+)
+
+# The phenotype ontology of a "Monarch" term, by the prefix of the term (as on STRING's server;
+# "WBP:" is the website's short form of "WBPhenotype:").
+VALUES_RANKS_PHENOTYPE_PREFIXES <- c(
+  "HP:" = "HPO", "MP:" = "MPO", "FBcv:" = "DPO", "WBPhenotype:" = "WPO", "WBP:" = "WPO",
+  "ZP:" = "ZPO", "FYPO:" = "FYPO"
+)
+
 # The first words of the states of a finished job and of a failed one, as STRING reports
-# them (lower case, without dots; see values_ranks_state). Any other state counts as not
-# finished yet.
+# them (lower case, without dots; see values_ranks_state), and of a job that waits in STRING's
+# queue. "expired" is a job that STRING no longer has. Any other state counts as running.
 VALUES_RANKS_FINISHED_STATES <- c("success", "done")
 VALUES_RANKS_FAILED_STATES <- c("error", "failure", "failed")
+VALUES_RANKS_WAITING_STATES <- c("submitted", "preparing")
 
 # The first and the longest wait between two status requests, in seconds.
 VALUES_RANKS_FIRST_POLL_INTERVAL <- 5
@@ -1088,10 +1192,6 @@ VALUES_RANKS_LONGEST_POLL_INTERVAL <- 30
 # The number of status requests in a row that may fail (e.g. a connection error) before
 # waiting gives up; the job itself keeps running on STRING.
 VALUES_RANKS_MAX_FAILED_STATUS_REQUESTS <- 5
-
-# The caller identity with which the package requests its API key: STRING makes a key requested
-# by STRINGdb work at once (other new keys work after a few minutes).
-VALUES_RANKS_KEY_CALLER_IDENTITY <- "STRINGdb-package"
 
 # STRING's answers to a submission that it cannot take now but may take later: the limit of
 # active jobs per API key (1000 jobs waiting or running), the limits of its queue per address and
@@ -1122,7 +1222,7 @@ VALUES_RANKS_RESULT_TYPES <- c(
 # (HTTP 5xx) and refused requests (HTTP 4xx) stop with STRING's explanation; an error record
 # in the answer is left to the caller.
 post_string_json <- function(url_str, params, timeout_seconds = 60) {
-  response <- POST(url = url_str, body = params, config = timeout(timeout_seconds))
+  response <- POST(url = url_str, body = with_caller_identity(params), config = timeout(timeout_seconds))
   stop_on_server_error(response, url_str)
   stop_on_client_error(response, url_str)
   return(content(response, as = "parsed", type = "application/json", encoding = "UTF-8"))
@@ -1152,11 +1252,11 @@ string_tsv_error_message <- function(body_text) {
 }
 
 
-# GETs a text answer of STRING (the TSV results of a values/ranks job); query is added to
-# the parameters already in url_str. An expired or unknown result may be answered with
-# HTTP 400 and a TSV error, which stops with its explanation.
+# GETs a text answer of STRING (the TSV results of a values/ranks job); query and the package's
+# caller identity are added to the parameters already in url_str. An expired or unknown result
+# may be answered with HTTP 400 and a TSV error, which stops with its explanation.
 get_string_text <- function(url_str, query = NULL, timeout_seconds = 300) {
-  response <- GET(url_str, config = timeout(timeout_seconds), query = query)
+  response <- GET(url_str, config = timeout(timeout_seconds), query = with_caller_identity(query))
   stop_on_server_error(response, url_str)
 
   body_text <- content(response, as = "text", encoding = "UTF-8")
@@ -1237,6 +1337,24 @@ values_ranks_state <- function(status) {
     return("")
   }
   return(words[1])
+}
+
+
+# The status of a values/ranks job as get_values_ranks_status reports it, one of a fixed set,
+# from STRING's own state, which varies (e.g. "error", "failure" and "expired" for a failed
+# job): "submitted" (waiting in STRING's queue), "running", "success" (finished) or "failed".
+values_ranks_status_of <- function(status) {
+  state <- values_ranks_state(status)
+  if (state %in% VALUES_RANKS_FINISHED_STATES) {
+    return("success")
+  }
+  if (state %in% c(VALUES_RANKS_FAILED_STATES, "expired")) {
+    return("failed")
+  }
+  if (state %in% VALUES_RANKS_WAITING_STATES) {
+    return("submitted")
+  }
+  return("running")
 }
 
 
@@ -1334,7 +1452,7 @@ save_api_key <- function(api_key, key_file = values_ranks_key_file(), replace = 
 # session of the computer has saved a key meanwhile, that key is used instead.
 request_and_save_api_key <- function(stable_url, quiet = FALSE, key_file = values_ranks_key_file(),
                                      send = post_string_json) {
-  key <- request_string_api_key(stable_url, VALUES_RANKS_KEY_CALLER_IDENTITY, send)
+  key <- request_string_api_key(stable_url, send)
 
   saved_key <- save_api_key(key$api_key, key_file, replace = FALSE)
   if (nchar(saved_key) == 0) {
@@ -1357,25 +1475,14 @@ request_and_save_api_key <- function(stable_url, quiet = FALSE, key_file = value
 
 
 # Returns the API key for the values/ranks methods, as a list with the key and where it comes
-# from ("argument", "environment", "saved" or "new"): api_key when it is given; otherwise the
-# environment variable STRINGDB_API_KEY; otherwise the key saved on this computer
-# (values_ranks_key_file). Without any of these, request_new = TRUE requests a key from STRING and
-# saves it (request_and_save_api_key), so that a computer keeps using one key. STRING keeps each
-# job for the key that submitted it, so the methods that read jobs give request_new = FALSE and
-# stop instead.
-resolve_values_ranks_api_key <- function(api_key = NULL, stable_url = "", request_new = TRUE, quiet = FALSE,
+# from ("environment", "saved" or "new"): the environment variable STRINGDB_API_KEY when it is
+# set; otherwise the key saved on this computer (values_ranks_key_file). Without either,
+# request_new = TRUE requests a key from STRING and saves it (request_and_save_api_key), so that a
+# computer keeps using one key. STRING keeps each job for the key that submitted it, so the methods
+# that read jobs give request_new = FALSE and stop instead. The key is not an argument of the
+# methods: another key (e.g. of the jobs of another computer) is given as STRINGDB_API_KEY.
+resolve_values_ranks_api_key <- function(stable_url = "", request_new = TRUE, quiet = FALSE,
                                          key_file = values_ranks_key_file(), send = post_string_json) {
-  if (!is.null(api_key)) {
-    is_one_key <- is.character(api_key) && length(api_key) == 1 && !is.na(api_key) && nchar(trimws(api_key)) > 0
-    if (!is_one_key) {
-      stop(
-        "ERROR: api_key should be one STRING API key, or NULL for the key of this computer (see get_api_key).",
-        call. = FALSE
-      )
-    }
-    return(list(key = trimws(api_key), source = "argument"))
-  }
-
   environment_key <- trimws(Sys.getenv("STRINGDB_API_KEY"))
   if (nchar(environment_key) > 0) {
     return(list(key = environment_key, source = "environment"))
@@ -1389,7 +1496,8 @@ resolve_values_ranks_api_key <- function(api_key = NULL, stable_url = "", reques
   if (!request_new) {
     stop(
       "ERROR: there is no STRING API key on this computer. STRING keeps each values/ranks job for the API ",
-      "key that submitted it: give that key as api_key or as the environment variable STRINGDB_API_KEY.",
+      "key that submitted it: set that key as the environment variable STRINGDB_API_KEY, e.g. with ",
+      "Sys.setenv(STRINGDB_API_KEY = \"...\").",
       call. = FALSE
     )
   }
@@ -1428,12 +1536,16 @@ normalize_values_ranks_options <- function(max_fdr, rank_direction) {
 
 # Prepares the input of a values/ranks job: one line per protein, its identifier and its
 # value separated by a tab, as valuesranks_enrichment_submit expects. Rows without an
-# identifier or without a finite value are left out, and an identifier given more than once
-# keeps its value farthest from 0 (its first such value). Returns a list with the text and
-# the counts of the proteins submitted and of the rows left out.
+# identifier or without a value (NA) are left out, and so are infinite values (counted apart,
+# for a warning: see warn_infinite_values_ranks); an identifier given more than once keeps its
+# value farthest from 0 (its first such value). Returns a list with the text and the counts of
+# the proteins submitted and of the rows left out.
 prepare_values_ranks_input <- function(string_ids, values) {
   if (length(string_ids) != length(values)) {
     stop("ERROR: string_ids and values should have the same length.", call. = FALSE)
+  }
+  if (is.logical(values) && length(values) > 0 && all(is.na(values))) {
+    stop("ERROR: the values are all NA: there is nothing to rank.", call. = FALSE)
   }
   if (!is.numeric(values)) {
     stop("ERROR: values should be numeric, e.g. log fold changes or test statistics.", call. = FALSE)
@@ -1444,8 +1556,10 @@ prepare_values_ranks_input <- function(string_ids, values) {
     stop("ERROR: string_ids should not contain tabs or line breaks.", call. = FALSE)
   }
 
-  usable_rows <- !is.na(string_ids) & nchar(trimws(string_ids)) > 0 & is.finite(values)
-  n_missing <- sum(!usable_rows)
+  has_identifier <- !is.na(string_ids) & nchar(trimws(string_ids)) > 0
+  n_infinite <- sum(has_identifier & is.infinite(values))
+  usable_rows <- has_identifier & is.finite(values)
+  n_missing <- sum(!usable_rows) - n_infinite
   string_ids <- trimws(string_ids[usable_rows])
   values <- values[usable_rows]
 
@@ -1466,8 +1580,37 @@ prepare_values_ranks_input <- function(string_ids, values) {
     text = input_text,
     n_submitted = length(string_ids),
     n_missing = n_missing,
+    n_infinite = n_infinite,
     n_duplicates = n_duplicates
   ))
+}
+
+
+# Warns that infinite values were left out of the experiments (prepare_values_ranks_experiments),
+# also with quiet = TRUE: they are typically the most significant proteins, e.g. -log10 of a
+# p-value of 0, so leaving them out changes the analysis.
+warn_infinite_values_ranks <- function(experiments) {
+  n_infinite <- vapply(experiments, function(experiment) as.numeric(experiment$n_infinite), numeric(1))
+  if (sum(n_infinite) == 0) {
+    return(invisible(NULL))
+  }
+
+  left_out <- paste(sum(n_infinite), "infinite values were left out")
+  with_proteins <- ", with their proteins"
+  if (sum(n_infinite) == 1) {
+    left_out <- "1 infinite value was left out"
+    with_proteins <- ", with its protein"
+  }
+  where <- ""
+  if (length(experiments) > 1) {
+    where <- paste(" in ", sum(n_infinite > 0), " of ", length(experiments), " experiments", sep = "")
+  }
+  warning(
+    left_out, where, with_proteins, " (e.g. -log10 of a p-value of 0). To keep these proteins, give them ",
+    "finite values, e.g. the largest finite value of the same sign.",
+    call. = FALSE
+  )
+  return(invisible(NULL))
 }
 
 
@@ -1511,15 +1654,13 @@ is_api_key_refusal <- function(condition) {
 
 # Submits a values/ranks job and returns its job_id, or stops with STRING's reason (a
 # values_ranks_submission_refused error).
-submit_values_ranks_job <- function(stable_url, species, input_text, api_key, options,
-                                    caller_identity = "STRINGdb-package", send = post_string_json) {
+submit_values_ranks_job <- function(stable_url, species, input_text, api_key, options, send = post_string_json) {
   url_str <- paste(stable_url, "/api/json/valuesranks_enrichment_submit", sep = "")
   params <- c(
     list(
       api_key = api_key,
       species = format(species, scientific = FALSE, trim = TRUE),
-      identifiers = input_text,
-      caller_identity = caller_identity
+      identifiers = input_text
     ),
     options
   )
@@ -1546,11 +1687,10 @@ submit_values_ranks_job <- function(stable_url, species, input_text, api_key, op
 # the submission with the replacement fails, the error carries the replacement (key_info), so
 # that the caller goes on with it instead of requesting yet another key.
 submit_first_values_ranks_job <- function(stable_url, species, input_text, key_info, options,
-                                          caller_identity = "STRINGdb-package", quiet = FALSE,
-                                          key_file = values_ranks_key_file(), send = post_string_json) {
+                                          quiet = FALSE, key_file = values_ranks_key_file(), send = post_string_json) {
   if (key_info$source != "replacement") {
     first_try <- tryCatch(
-      submit_values_ranks_job(stable_url, species, input_text, key_info$key, options, caller_identity, send),
+      submit_values_ranks_job(stable_url, species, input_text, key_info$key, options, send),
       values_ranks_submission_refused = function(e) e
     )
     if (!inherits(first_try, "values_ranks_submission_refused")) {
@@ -1568,14 +1708,14 @@ submit_first_values_ranks_job <- function(stable_url, species, input_text, key_i
     # key now, the job is submitted again with it, and when the answer is unclear, nothing changes
     key_known <- tryCatch(
       {
-        get_values_ranks_jobs_states(stable_url, key_info$key, caller_identity, send)
+        get_values_ranks_jobs_states(stable_url, key_info$key, send)
         TRUE
       },
       values_ranks_refused = function(e) !grepl("Api key does not exist", conditionMessage(e), fixed = TRUE),
       error = function(e) NA
     )
     if (isTRUE(key_known)) {
-      job_id <- submit_values_ranks_job(stable_url, species, input_text, key_info$key, options, caller_identity, send)
+      job_id <- submit_values_ranks_job(stable_url, species, input_text, key_info$key, options, send)
       return(list(job_id = job_id, key_info = key_info))
     }
     if (is.na(key_known)) {
@@ -1588,12 +1728,12 @@ submit_first_values_ranks_job <- function(stable_url, species, input_text, key_i
         "requested, and saved in its place once STRING has taken a job with it."
       )
     }
-    new_key <- request_string_api_key(stable_url, VALUES_RANKS_KEY_CALLER_IDENTITY, send)$api_key
+    new_key <- request_string_api_key(stable_url, send)$api_key
     key_info <- list(key = new_key, source = "replacement", replaced_key = key_info$key)
   }
 
   job_id <- tryCatch(
-    submit_values_ranks_job(stable_url, species, input_text, key_info$key, options, caller_identity, send),
+    submit_values_ranks_job(stable_url, species, input_text, key_info$key, options, send),
     error = function(e) {
       e$key_info <- key_info
       stop(e)
@@ -1627,8 +1767,7 @@ submit_first_values_ranks_job <- function(stable_url, species, input_text, key_i
 # timeout_seconds have passed, waiting between the tries from 5 s, growing to 30 s. Returns what
 # submit_first_values_ranks_job returns, and waited, the seconds that the submission took.
 submit_values_ranks_job_when_possible <- function(stable_url, species, input_text, key_info, options,
-                                                  timeout_seconds, caller_identity = "STRINGdb-package",
-                                                  quiet = FALSE, key_file = values_ranks_key_file(),
+                                                  timeout_seconds, quiet = FALSE, key_file = values_ranks_key_file(),
                                                   send = post_string_json, sleep = Sys.sleep,
                                                   clock = function() proc.time()[["elapsed"]]) {
   started <- clock()
@@ -1637,7 +1776,7 @@ submit_values_ranks_job_when_possible <- function(stable_url, species, input_tex
 
   repeat {
     submission <- tryCatch(
-      submit_first_values_ranks_job(stable_url, species, input_text, key_info, options, caller_identity, quiet, key_file, send),
+      submit_first_values_ranks_job(stable_url, species, input_text, key_info, options, quiet, key_file, send),
       error = function(e) e
     )
     if (!inherits(submission, "error")) {
@@ -1681,10 +1820,9 @@ submit_values_ranks_job_when_possible <- function(stable_url, species, input_tex
 # submission, so a refusal means that another key was given (e.g. to get_values_ranks_results); a new
 # key cannot help. An answer without a record comes from a job that STRING has confirmed for
 # this key but whose state it lost: the job failed on STRING.
-get_values_ranks_job_status <- function(stable_url, api_key, job_id, caller_identity = "STRINGdb-package",
-                                        send = post_string_json) {
+get_values_ranks_job_status <- function(stable_url, api_key, job_id, send = post_string_json) {
   url_str <- paste(stable_url, "/api/json/valuesranks_enrichment_status", sep = "")
-  params <- list(api_key = api_key, job_id = job_id, caller_identity = caller_identity)
+  params <- list(api_key = api_key, job_id = job_id)
 
   record <- first_json_record(send(url_str, params))
   if (is.null(record)) {
@@ -1734,7 +1872,6 @@ get_values_ranks_job_status <- function(stable_url, api_key, job_id, caller_iden
 # 30 s. A progress message is printed when the state or its message changes (not only a
 # number in it, such as a position in the queue).
 wait_for_values_ranks_job <- function(stable_url, api_key, job_id, timeout_seconds, quiet = FALSE,
-                                      caller_identity = "STRINGdb-package",
                                       send = post_string_json, sleep = Sys.sleep,
                                       clock = function() proc.time()[["elapsed"]]) {
   resume_hint <- values_ranks_resume_hint(job_id)
@@ -1745,7 +1882,7 @@ wait_for_values_ranks_job <- function(stable_url, api_key, job_id, timeout_secon
 
   repeat {
     job <- tryCatch(
-      get_values_ranks_job_status(stable_url, api_key, job_id, caller_identity, send),
+      get_values_ranks_job_status(stable_url, api_key, job_id, send),
       error = function(e) e
     )
 
@@ -1811,11 +1948,74 @@ wait_for_values_ranks_job <- function(stable_url, api_key, job_id, timeout_secon
 }
 
 
-# Reads the TSV results of a values/ranks job into a data frame with STRING's columns
-# (VALUES_RANKS_RESULT_COLUMNS), the counts as integers and the scores as numbers. A table
+# Reads the TSV results of a values/ranks job into a data frame in the package's form
+# (format_values_ranks_results), the counts as integers and the scores as numbers. A table
 # without terms (only its header) gives a data frame without rows. An empty answer is
 # STRING's answer for results it no longer has, and stops.
 read_values_ranks_results <- function(body_text, job_id) {
+  return(format_values_ranks_results(read_values_ranks_table(body_text, job_id)))
+}
+
+
+# The category codes of get_enrichment for the categories of values/ranks results (category, as
+# STRING names them; terms, their term identifiers): VALUES_RANKS_CATEGORY_CODES, and for
+# "Monarch" the phenotype ontology of the term's prefix (VALUES_RANKS_PHENOTYPE_PREFIXES). A
+# category that neither knows keeps STRING's name.
+values_ranks_category_codes <- function(categories, terms) {
+  codes <- unname(VALUES_RANKS_CATEGORY_CODES[categories])
+
+  is_phenotype <- !is.na(categories) & categories == "Monarch"
+  for (prefix in names(VALUES_RANKS_PHENOTYPE_PREFIXES)) {
+    has_prefix <- is_phenotype & !is.na(terms) & startsWith(terms, prefix)
+    codes[has_prefix] <- VALUES_RANKS_PHENOTYPE_PREFIXES[[prefix]]
+  }
+
+  unknown <- is.na(codes)
+  codes[unknown] <- categories[unknown]
+  return(codes)
+}
+
+
+# A comma-separated list of numbers for each text of texts, as a list of vectors made by convert
+# (as.numeric or as.integer); an empty text gives an empty vector.
+split_number_lists <- function(texts, convert) {
+  return(lapply(texts, function(text) {
+    if (is.na(text) || nchar(text) == 0) {
+      return(convert(character(0)))
+    }
+    return(convert(strsplit(text, ",", fixed = TRUE)[[1]]))
+  }))
+}
+
+
+# The results of a values/ranks job (STRING's table, read_values_ranks_table) in the package's form,
+# aligned with get_enrichment: its column names and order where a column means the same
+# (VALUES_RANKS_COLUMN_NAMES) and its category codes (values_ranks_category_codes). inputGenes and
+# preferredNames stay comma-separated text, as in get_enrichment; the input values and the ranks of
+# the term's proteins become list columns of numbers (inputValues, numeric; inputRanks, integer).
+format_values_ranks_results <- function(table) {
+  missing_columns <- setdiff(names(VALUES_RANKS_COLUMN_NAMES), colnames(table))
+  if (length(missing_columns) > 0) {
+    stop(
+      "ERROR: STRING's results of the values/ranks job lack the columns ", paste(missing_columns, collapse = ", "), ".",
+      call. = FALSE
+    )
+  }
+
+  results <- table[, names(VALUES_RANKS_COLUMN_NAMES), drop = FALSE]
+  colnames(results) <- unname(VALUES_RANKS_COLUMN_NAMES)
+  results$category <- values_ranks_category_codes(results$category, results$term)
+  results$inputValues <- split_number_lists(results$inputValues, as.numeric)
+  results$inputRanks <- split_number_lists(results$inputRanks, as.integer)
+  rownames(results) <- NULL
+  return(results)
+}
+
+
+# Reads the TSV results of a values/ranks job into a data frame with STRING's columns
+# (VALUES_RANKS_STRING_COLUMNS), the counts as integers and the scores as numbers; the other
+# columns stay text.
+read_values_ranks_table <- function(body_text, job_id) {
   if (is.null(body_text) || length(body_text) != 1 || is.na(body_text) || nchar(trimws(body_text)) == 0) {
     stop(
       "ERROR: STRING has no results for values/ranks job ", job_id, " (they may have expired). ",
@@ -1865,16 +2065,16 @@ set_values_ranks_attributes <- function(results, job_id, job) {
 
 # Waits for a values/ranks job, downloads its results and returns them, with the job's
 # addresses as attributes (job_id, page_url, graph_url, download_url, string_version).
-# When the wait or the download is interrupted (Ctrl-C) or the download fails, a message
+# A download that fails is tried again a few times, as for several jobs (run_values_ranks_jobs).
+# When the wait or the download is interrupted (Ctrl-C) or the download keeps failing, a message
 # says how to get the results later.
 collect_values_ranks_results <- function(stable_url, api_key, job_id, timeout_seconds, quiet = FALSE,
-                                         caller_identity = "STRINGdb-package",
                                          send = post_string_json, fetch = get_string_text, sleep = Sys.sleep,
                                          clock = function() proc.time()[["elapsed"]]) {
   resume_hint <- values_ranks_resume_hint(job_id)
 
   job <- withCallingHandlers(
-    wait_for_values_ranks_job(stable_url, api_key, job_id, timeout_seconds, quiet, caller_identity, send, sleep, clock),
+    wait_for_values_ranks_job(stable_url, api_key, job_id, timeout_seconds, quiet, send, sleep, clock),
     interrupt = function(condition) {
       message("\nThe values/ranks job ", job_id, " keeps running on STRING. ", resume_hint)
     }
@@ -1884,24 +2084,33 @@ collect_values_ranks_results <- function(stable_url, api_key, job_id, timeout_se
     stop("ERROR: STRING gave no address for the results of values/ranks job ", job_id, ".", call. = FALSE)
   }
 
-  # the results are downloaded at once: STRING keeps them only for a limited time
-  body_text <- withCallingHandlers(
-    tryCatch(
-      fetch(job$download_url, list(caller_identity = caller_identity)),
-      error = function(e) {
-        stop(
-          "ERROR: the results of values/ranks job ", job_id, " could not be downloaded from STRING (",
-          sub("^ERROR: ", "", conditionMessage(e)), "). ", resume_hint,
-          " If STRING no longer has them, please submit the job again.",
-          call. = FALSE
-        )
+  # the results are downloaded at once, as STRING keeps them only for a limited time. A download
+  # that fails (also one that gives no results table, e.g. an error page) is tried again, waiting
+  # between the tries from 5 s, growing to 30 s.
+  interval <- VALUES_RANKS_FIRST_POLL_INTERVAL
+  attempt <- 1
+  repeat {
+    results <- withCallingHandlers(
+      tryCatch(download_values_ranks_results(job, job_id, fetch), error = function(e) e),
+      interrupt = function(condition) {
+        message("\nThe results of values/ranks job ", job_id, " were not downloaded. ", resume_hint)
       }
-    ),
-    interrupt = function(condition) {
-      message("\nThe results of values/ranks job ", job_id, " were not downloaded. ", resume_hint)
+    )
+    if (!inherits(results, "error")) {
+      break
     }
-  )
-  results <- set_values_ranks_attributes(read_values_ranks_results(body_text, job_id), job_id, job)
+    if (is_interrupted_request(results)) {
+      stop("ERROR: the download of the results of values/ranks job ", job_id, " was interrupted. ", resume_hint,
+           call. = FALSE)
+    }
+    if (attempt >= VALUES_RANKS_MAX_FAILED_STATUS_REQUESTS) {
+      stop(conditionMessage(results), " ", resume_hint, " If STRING no longer has them, please submit the job again.",
+           call. = FALSE)
+    }
+    attempt <- attempt + 1
+    sleep(interval)
+    interval <- min(VALUES_RANKS_LONGEST_POLL_INTERVAL, interval * 1.5)
+  }
 
   if (!quiet) {
     message("STRING's values/ranks enrichment found ", nrow(results), " terms (job ", job_id, ").")
@@ -1911,9 +2120,10 @@ collect_values_ranks_results <- function(stable_url, api_key, job_id, timeout_se
 
 
 # Requests an API key from STRING (get_api_key). Returns a list with the key and STRING's note.
-request_string_api_key <- function(stable_url, caller_identity = "STRINGdb-package", send = post_string_json) {
+# STRING makes the key work at once, as post_string_json sends the package's caller identity.
+request_string_api_key <- function(stable_url, send = post_string_json) {
   url_str <- paste(stable_url, "/api/json/get_api_key", sep = "")
-  record <- first_json_record(send(url_str, list(caller_identity = caller_identity)))
+  record <- first_json_record(send(url_str, list()))
   api_key <- ""
   if (!is.null(record)) {
     api_key <- json_record_field(record, "api_key")
@@ -1942,6 +2152,126 @@ check_values_ranks_timeout <- function(timeout) {
 }
 
 
+# Checks the quiet argument of the values/ranks methods: TRUE or FALSE.
+check_values_ranks_quiet <- function(quiet) {
+  if (!(is.logical(quiet) && length(quiet) == 1 && !is.na(quiet))) {
+    stop("ERROR: quiet should be TRUE or FALSE.", call. = FALSE)
+  }
+  return(invisible(NULL))
+}
+
+
+# Stops, before any request, when the object uses a STRING version older than 12.0: STRING's
+# values/ranks API and its API keys exist since version 12.0, and older versions answer with a
+# web page (11.0) or with "You have not provided any input" (11.5).
+check_values_ranks_version <- function(version) {
+  version_number <- suppressWarnings(as.numeric(version))
+  if (!is.na(version_number) && version_number >= 12.0) {
+    return(invisible(NULL))
+  }
+  stop(
+    "ERROR: STRING's values/ranks enrichment needs STRING version 12.0 or later; this object uses version ",
+    version, ". Create the object with a newer version, e.g. STRINGdb$new(version = \"12.5\", species = ...).",
+    call. = FALSE
+  )
+}
+
+
+# The names of values that could be identifiers: the names of a vector (or of a 1-d array, e.g. from
+# tapply), or the row names of a matrix or data frame. Row names that are the numbers of the rows (a
+# data frame's automatic or subset row names, which it keeps as integers, or a matrix's digits only)
+# are not identifiers. NULL without such names.
+values_ranks_names_of <- function(values) {
+  if (is.matrix(values) || is.data.frame(values)) {
+    if (is.data.frame(values) && !is.character(.row_names_info(values, type = 0L))) {
+      return(NULL)
+    }
+    row_names <- rownames(values)
+    if (is.null(row_names) || all(grepl("^[0-9]+$", row_names))) {
+      return(NULL)
+    }
+    return(row_names)
+  }
+  return(names(values))
+}
+
+
+# The identifiers and values of the values/ranks methods, which take them as string_ids and values,
+# or the values alone (the other one NULL), as R's GSEA packages do (e.g. fgsea's stats): a numeric
+# vector named by STRING identifiers (also a named 1-d array, e.g. from tapply), or a matrix or data
+# frame with STRING identifiers as row names and one column for each experiment. Row names that are
+# the numbers of the rows are not identifiers, and stop. Returns a list with string_ids and values.
+values_ranks_input_of <- function(string_ids = NULL, values = NULL) {
+  how_to_give <- paste(
+    "give string_ids and values, or the values alone: a numeric vector named by STRING identifiers ",
+    "(e.g. setNames(mapped$logFC, mapped$STRING_id)), or a matrix or data frame with STRING identifiers ",
+    "as row names and one column for each experiment.",
+    sep = ""
+  )
+
+  if (!is.null(string_ids) && !is.null(values)) {
+    # string_ids that are values themselves: the second argument was probably meant for another
+    # option (e.g. max_fdr), given by position
+    if (is.numeric(string_ids) || is.matrix(string_ids) || is.data.frame(string_ids)) {
+      stop(
+        "ERROR: string_ids should be STRING identifiers, but are values. To give the values alone, give the ",
+        "other options by name (e.g. max_fdr = 0.05); otherwise ", how_to_give,
+        call. = FALSE
+      )
+    }
+
+    # string_ids and values are paired by position. Values named by STRING identifiers in another
+    # order (e.g. a vector sorted by value, as clusterProfiler's geneList) would give each protein
+    # the value of another, so they stop; names that are other identifiers (e.g. gene names) are
+    # not compared.
+    value_names <- values_ranks_names_of(values)
+    identifiers <- as.character(string_ids)
+    if (!is.null(value_names) && any(value_names %in% identifiers) && !identical(as.character(value_names), identifiers)) {
+      stop(
+        "ERROR: the values are named by STRING identifiers that differ from string_ids (in their order or in ",
+        "which they are), while values and string_ids are paired by position. Give the values alone (their ",
+        "names are then the identifiers), or the values in the order of string_ids.",
+        call. = FALSE
+      )
+    }
+    return(list(string_ids = string_ids, values = values))
+  }
+
+  ranked <- values
+  if (is.null(ranked)) {
+    ranked <- string_ids
+  }
+  if (is.null(ranked)) {
+    stop("ERROR: no values to rank: ", how_to_give, call. = FALSE)
+  }
+
+  # a vector, or a 1-d array (e.g. from tapply), whose names are its dimnames
+  if (is.numeric(ranked) && length(dim(ranked)) <= 1) {
+    if (is.null(names(ranked))) {
+      stop("ERROR: the values have no names, which would be their STRING identifiers: ", how_to_give, call. = FALSE)
+    }
+    return(list(string_ids = names(ranked), values = as.vector(ranked)))
+  }
+
+  if (is.matrix(ranked) || is.data.frame(ranked)) {
+    row_names <- values_ranks_names_of(ranked)
+    if (is.null(row_names)) {
+      stop(
+        "ERROR: the table of values has no row names that could be STRING identifiers (it has the numbers of ",
+        "its rows): ", how_to_give,
+        call. = FALSE
+      )
+    }
+    return(list(string_ids = row_names, values = ranked))
+  }
+
+  if (is.logical(ranked) && length(ranked) > 0 && all(is.na(ranked))) {
+    stop("ERROR: the values are all NA: there is nothing to rank.", call. = FALSE)
+  }
+  stop("ERROR: the values should be numeric: ", how_to_give, call. = FALSE)
+}
+
+
 # Prepares the experiments of the values/ranks methods. values is a numeric vector, one
 # experiment, or a matrix or data frame with one numeric column for each experiment, named by
 # its column, and one row for each identifier of string_ids. Returns a list with experiments,
@@ -1950,11 +2280,13 @@ check_values_ranks_timeout <- function(timeout) {
 # makes the input text of its job: the texts of a table are made one at a time, when its jobs are
 # submitted, since they would take much memory for many experiments (about 0.8 MB for 20,000
 # proteins). All experiments are checked first, so that a problem stops before any submission.
+# Infinite values left out get a warning (warn_infinite_values_ranks).
 prepare_values_ranks_experiments <- function(string_ids, values) {
   if (!(is.matrix(values) || is.data.frame(values))) {
     input <- prepare_values_ranks_input(string_ids, values)
     input_text <- input$text
     input$make_text <- function() input_text
+    warn_infinite_values_ranks(list(input))
     return(list(experiments = list(input), several = FALSE))
   }
 
@@ -2015,6 +2347,7 @@ prepare_values_ranks_experiments <- function(string_ids, values) {
     return(list(
       n_submitted = input$n_submitted,
       n_missing = input$n_missing,
+      n_infinite = input$n_infinite,
       n_duplicates = input$n_duplicates,
       column_number = column_number,
       make_text = text_maker(column_number)
@@ -2023,20 +2356,21 @@ prepare_values_ranks_experiments <- function(string_ids, values) {
 
   experiments <- lapply(seq_len(ncol(values)), experiment_of)
   names(experiments) <- experiment_names
+  warn_infinite_values_ranks(experiments)
   return(list(experiments = experiments, several = TRUE))
 }
 
 
 # Messages about the rows that the experiments leave out (prepare_values_ranks_input): for one
 # experiment as before, for several in one message each about missing values and about repeated
-# identifiers.
+# identifiers. Infinite values get a warning instead (warn_infinite_values_ranks).
 report_left_out_rows <- function(prepared) {
   n_missing <- vapply(prepared$experiments, function(input) as.numeric(input$n_missing), numeric(1))
   n_duplicates <- vapply(prepared$experiments, function(input) as.numeric(input$n_duplicates), numeric(1))
 
   if (!prepared$several) {
     if (n_missing > 0) {
-      message("Left out ", n_missing, " rows without an identifier or without a finite value.")
+      message("Left out ", n_missing, " rows without an identifier or without a value.")
     }
     if (n_duplicates > 0) {
       message("Left out ", n_duplicates, " repeated identifiers (each keeps its value farthest from 0).")
@@ -2046,7 +2380,7 @@ report_left_out_rows <- function(prepared) {
 
   if (sum(n_missing) > 0) {
     message(
-      "Left out rows without an identifier or without a finite value in ", sum(n_missing > 0), " of ",
+      "Left out rows without an identifier or without a value in ", sum(n_missing > 0), " of ",
       length(n_missing), " experiments (", sum(n_missing), " rows in all)."
     )
   }
@@ -2141,10 +2475,9 @@ check_values_ranks_job_ids <- function(job_ids) {
 # get_values_ranks_job_status returns for one job, and its creation_time. A request that STRING
 # refuses (an error record without a job_id, e.g. for an unknown key) stops with a
 # values_ranks_refused error.
-get_values_ranks_jobs_states <- function(stable_url, api_key, caller_identity = "STRINGdb-package",
-                                         send = post_string_json) {
+get_values_ranks_jobs_states <- function(stable_url, api_key, send = post_string_json) {
   url_str <- paste(stable_url, "/api/json/valuesranks_enrichment_status", sep = "")
-  answer <- send(url_str, list(api_key = api_key, caller_identity = caller_identity))
+  answer <- send(url_str, list(api_key = api_key))
 
   # the answer is a list of records, or one record
   records <- list()
@@ -2204,9 +2537,15 @@ get_values_ranks_jobs_states <- function(stable_url, api_key, caller_identity = 
 
 # The states of values/ranks jobs (job_ids, named or not; states from get_values_ranks_jobs_states)
 # as a data frame with the columns experiment (the name of the job, NA without names), job_id,
-# status (STRING's state, in lower case), message and creation_time. A job that STRING does not
-# list for the key has the status "unknown".
+# status (one of a fixed set: values_ranks_status_of, or "unknown" for a job that STRING does not
+# list for the key), message (STRING's) and creation_time. Without job_ids (NULL), all jobs that
+# STRING lists for the key, oldest first.
 values_ranks_status_table <- function(job_ids, states) {
+  if (is.null(job_ids)) {
+    # STRING's creation times are text such as "2026-11-05 12:00:00", which sorts in time order
+    creation_times <- vapply(states, function(job) as.character(job$creation_time), character(1))
+    job_ids <- as.character(names(states))[order(creation_times)]
+  }
   experiment <- names(job_ids)
   if (is.null(experiment)) {
     experiment <- rep(NA_character_, length(job_ids))
@@ -2221,8 +2560,11 @@ values_ranks_status_table <- function(job_ids, states) {
   positions <- match(unname(job_ids), names(states))
   for (job_number in which(!is.na(positions))) {
     job <- states[[positions[job_number]]]
-    status[job_number] <- job$status
+    status[job_number] <- values_ranks_status_of(job$status)
     message_text[job_number] <- job$message
+    if (values_ranks_state(job$status) == "expired") {
+      message_text[job_number] <- "STRING no longer has this job: submit it again."
+    }
     creation_time[job_number] <- job$creation_time
   }
 
@@ -2236,13 +2578,12 @@ values_ranks_status_table <- function(job_ids, states) {
 # Downloads and reads the results of a finished values/ranks job (job: its state) and returns
 # them with the job's attributes (set_values_ranks_attributes). Stops when they cannot be had; an
 # interrupt of the download (is_interrupted_request) stops with curl's own error.
-download_values_ranks_results <- function(job, job_id, caller_identity = "STRINGdb-package",
-                                          fetch = get_string_text) {
+download_values_ranks_results <- function(job, job_id, fetch = get_string_text) {
   if (nchar(job$download_url) == 0) {
     stop("ERROR: STRING gave no address for the results of values/ranks job ", job_id, ".", call. = FALSE)
   }
   body_text <- tryCatch(
-    fetch(job$download_url, list(caller_identity = caller_identity)),
+    fetch(job$download_url),
     error = function(e) {
       if (is_interrupted_request(e)) {
         stop(e)
@@ -2267,7 +2608,7 @@ download_values_ranks_results <- function(job, job_id, caller_identity = "STRING
 # all experiments (e.g. a wrong key or species), and so does a request that fails. An interrupt
 # of the request (is_interrupted_request) stops with curl's error.
 submit_next_values_ranks_experiment <- function(stable_url, species, experiment, key_info, options,
-                                                caller_identity = "STRINGdb-package", first_submission = TRUE,
+                                                first_submission = TRUE,
                                                 quiet = FALSE, key_file = values_ranks_key_file(),
                                                 send = post_string_json) {
   input_text <- experiment$make_text()
@@ -2276,10 +2617,10 @@ submit_next_values_ranks_experiment <- function(stable_url, species, experiment,
     {
       if (first_submission) {
         submit_first_values_ranks_job(
-          stable_url, species, input_text, key_info, options, caller_identity, quiet, key_file, send
+          stable_url, species, input_text, key_info, options, quiet, key_file, send
         )
       } else {
-        new_job_id <- submit_values_ranks_job(stable_url, species, input_text, key_info$key, options, caller_identity, send)
+        new_job_id <- submit_values_ranks_job(stable_url, species, input_text, key_info$key, options, send)
         list(job_id = new_job_id, key_info = key_info)
       }
     },
@@ -2320,7 +2661,8 @@ submit_next_values_ranks_experiment <- function(stable_url, species, experiment,
 # Runs values/ranks jobs: submits the experiments of pending (a named list of experiments of
 # prepare_values_ranks_experiments) and, with wait = TRUE, waits for them and for the jobs of
 # job_ids (named) and downloads their results. Experiments that STRING cannot take now are
-# submitted as jobs finish. With wait = FALSE the run ends after the submissions.
+# submitted as jobs finish. With wait = FALSE the run ends after the submissions (a submission
+# request that fails is tried again a few times, as with waiting).
 # Returns a list with job_ids (all submitted jobs, named), results (the downloaded results,
 # named), failed (the reasons of the experiments that failed, named), pending (the experiments not
 # submitted), held_back (why they were not) and timed_out (whether the timeout ended the wait,
@@ -2331,7 +2673,7 @@ submit_next_values_ranks_experiment <- function(stable_url, species, experiment,
 # the job ids, which the message lists.
 run_values_ranks_jobs <- function(stable_url, species, pending, key_info, options = list(),
                                   job_ids = character(0), wait = TRUE, timeout_seconds = 7200,
-                                  quiet = FALSE, caller_identity = "STRINGdb-package", job_ids_known = FALSE,
+                                  quiet = FALSE, job_ids_known = FALSE,
                                   key_file = values_ranks_key_file(), send = post_string_json,
                                   fetch = get_string_text, sleep = Sys.sleep,
                                   clock = function() proc.time()[["elapsed"]]) {
@@ -2381,11 +2723,12 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
       # submissions: job_ids grows with each job, so that an interrupt lists all submitted jobs
       if (submitting && length(pending) > 0) {
         submitted_now <- 0
+        request_failed <- FALSE
         while (length(pending) > 0) {
           experiment_name <- names(pending)[1]
           step <- tryCatch(
             submit_next_values_ranks_experiment(
-              stable_url, species, pending[[1]], key_info, options, caller_identity, first_submission,
+              stable_url, species, pending[[1]], key_info, options, first_submission,
               quiet, key_file, send
             ),
             error = function(e) e
@@ -2406,6 +2749,7 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
               break
             }
             failed_submission_requests <- failed_submission_requests + 1
+            request_failed <- TRUE
             if (failed_submission_requests >= VALUES_RANKS_MAX_FAILED_STATUS_REQUESTS) {
               submitting <- FALSE
               held_back <- paste("the submissions to STRING kept failing: ", step$reason, sep = "")
@@ -2436,8 +2780,16 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
         if (!quiet && submitted_now > 0) {
           message("Submitted ", submitted_now, " jobs to STRING's values/ranks enrichment.")
         }
+        # without waiting, the run ends after the submissions. A submission request that failed is
+        # tried again, a few times as with waiting; an experiment that STRING cannot take now (e.g.
+        # for the limit of active jobs) is left for a later submission.
         if (!wait) {
-          break
+          if (!(request_failed && submitting)) {
+            break
+          }
+          sleep(interval)
+          interval <- min(VALUES_RANKS_LONGEST_POLL_INTERVAL, interval * 1.5)
+          next
         }
       }
 
@@ -2448,7 +2800,7 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
 
       if (length(waiting_for) > 0) {
         states <- tryCatch(
-          get_values_ranks_jobs_states(stable_url, key_info$key, caller_identity, send),
+          get_values_ranks_jobs_states(stable_url, key_info$key, send),
           error = function(e) e
         )
 
@@ -2480,7 +2832,7 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
             # not listed for the key: a request for the job alone tells why; a request that fails
             # is asked again in the next round
             job <- tryCatch(
-              get_values_ranks_job_status(stable_url, key_info$key, job_id, caller_identity, send),
+              get_values_ranks_job_status(stable_url, key_info$key, job_id, send),
               error = function(e) e
             )
             if (inherits(job, "values_ranks_refused")) {
@@ -2500,7 +2852,7 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
           job_state <- values_ranks_state(job$status)
           if (job_state %in% VALUES_RANKS_FINISHED_STATES) {
             downloaded <- tryCatch(
-              download_values_ranks_results(job, job_id, caller_identity, fetch),
+              download_values_ranks_results(job, job_id, fetch),
               error = function(e) e
             )
             if (!inherits(downloaded, "error")) {
@@ -2583,17 +2935,29 @@ values_ranks_not_submitted <- function(pending) {
 
 # The results of several experiments or jobs (run_values_ranks_jobs) as a list named by
 # experiment (or job), in the order of experiment_names, with NULL for an experiment that failed,
-# was not finished when the timeout ended the wait, or was not submitted. The job ids are the
-# attribute job_ids, and the column numbers of the experiments that were not submitted, named by
-# experiment, the attribute not_submitted. Warnings name the failed experiments with their
-# reasons, and say how to get the results of the unfinished jobs and how to submit the others.
-# what names the entries in the warnings.
+# was not finished when the timeout ended the wait, or was not submitted. The attribute status
+# says which, for each entry: "success", "failed", "unfinished" or "not submitted", so that a NULL
+# entry is not taken for results without terms. The job ids are the attribute job_ids, and the
+# column numbers of the experiments that were not submitted, named by experiment, the attribute
+# not_submitted. Warnings name the failed experiments with their reasons, and say how to get the
+# results of the unfinished jobs and how to submit the others. what names the entries in the
+# warnings.
 values_ranks_results_list <- function(run, experiment_names, what = "experiments") {
   results <- vector("list", length(experiment_names))
   names(results) <- experiment_names
   for (experiment_name in names(run$results)) {
     results[[experiment_name]] <- run$results[[experiment_name]]
   }
+
+  # an entry that is neither finished, failed nor left unsubmitted is a job that did not finish
+  # before the timeout
+  status <- rep("unfinished", length(experiment_names))
+  names(status) <- experiment_names
+  status[names(run$results)] <- "success"
+  status[names(run$failed)] <- "failed"
+  status[names(run$pending)] <- "not submitted"
+
+  attr(results, "status") <- status
   attr(results, "job_ids") <- run$job_ids
   if (length(run$pending) > 0) {
     attr(results, "not_submitted") <- values_ranks_not_submitted(run$pending)
@@ -2618,7 +2982,7 @@ values_ranks_results_list <- function(run, experiment_names, what = "experiments
     warning(
       length(run$pending), " experiments were not submitted (", run$held_back, "); their entries are NULL. ",
       "Their column numbers, named by experiment, are the attribute not_submitted of these results: submit ",
-      "them again with values[, not_submitted, drop = FALSE].",
+      "them again with values[, attr(results, \"not_submitted\"), drop = FALSE].",
       call. = FALSE
     )
   }

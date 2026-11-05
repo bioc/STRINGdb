@@ -6,28 +6,39 @@
   experiment, computed on STRING's servers, not locally: STRING's values/ranks enrichment ("Proteins
   with Values/Ranks" on the STRING website), on STRING's job queue. It submits the job, waits for it
   and returns the enriched terms as a data frame, with the direction of each term (top, bottom or both
-  ends of the ranked list) and the job's addresses on the STRING website. STRING's statistics differ
-  from the GSEA of Subramanian et al. (e.g. fgsea or clusterProfiler); its help explains how.
+  ends of the ranked list) and the job's addresses on the STRING website. It needs STRING 12.0 or
+  later. STRING's statistics differ from the GSEA of Subramanian et al. (e.g. fgsea or
+  clusterProfiler); its help explains how. The values can also be given alone, as R's GSEA packages
+  take them: a numeric vector named by STRING identifiers, or a table with STRING identifiers as row
+  names. Infinite values (e.g. -log10 of a p-value of 0) are left out with a warning. The results
+  have the columns of `get_enrichment()` where they mean the same (`term`, `number_of_genes`,
+  `inputGenes`, `fdr`, `description`, ...) and its category codes (`"Process"`, `"RCTM"`, ...); the
+  values and ranks of each term's proteins are the list columns `inputValues` and `inputRanks`.
 - Many experiments at once: with a table of values (one column for each experiment),
   `get_values_ranks_enrichment()` submits one job for each experiment, which STRING runs side by side
   on its servers, waits for all and returns a list of results. Up to 1000 jobs of an API key may wait
   or run at once; the method submits the others as jobs finish. To submit without waiting,
   `submit_values_ranks_enrichment()` returns the job identifiers at once, `get_values_ranks_status()`
-  shows the state of the jobs, and `get_values_ranks_results()` returns their results later, also in a
-  new R session. A job that fails does not stop the others, and when the timeout ends the wait, the
-  results so far are returned, with the job identifiers to get the rest later.
+  shows the state of the jobs (`"submitted"`, `"running"`, `"success"`, `"failed"` or `"unknown"`;
+  without job identifiers, of all jobs of the API key), and `get_values_ranks_results()` returns
+  their results later, also in a new R session. A job that fails does not stop the others, and when
+  the timeout ends the wait, the results so far are returned, with the job identifiers to get the
+  rest later; the attribute `status` of a list of results gives the state of each experiment
+  (`"success"`, `"failed"`, `"unfinished"` or `"not submitted"`).
 - The values/ranks methods need a STRING API key, which the package requests the first time and keeps
   on the computer (in `tools::R_user_dir("STRINGdb", "config")`); such a key works at once.
-  `STRINGDB_API_KEY`, when set, is used instead, e.g. to share one key across the nodes of a cluster.
-  `get_api_key()` shows the key of the computer, and `get_api_key(new = TRUE)` replaces it.
+  `STRINGDB_API_KEY`, when set, is used instead, e.g. to share one key across the nodes of a cluster,
+  or to read the jobs of another key; the methods take no key as an argument. `get_api_key()` shows
+  the key of the computer, and `get_api_key(new = TRUE)` replaces it.
 - `get_enrichment(add_scores = TRUE)` adds STRING's strength and signal columns (STRING 12.5).
 - `get_enrichment_figure()` accepts the categories GWAS and Hallmark, the palette `"red_blue"` and
   `x_axis = "count"` (STRING 12.5). With an older version these values stop with an error instead of
   silently giving STRING's default figure. `sort_by` also accepts `"count"`; like `graph_type` and the
   filters, `sort_by` is not used with an older version, with a warning.
 - `get_png()`, `get_link()` and `plot_network()`:
-  - `channels` selects the evidence channels (e.g. `c("experiments", "databases")`) from which STRING
-    computes the combined score (STRING 12.0 or later);
+  - `channels` selects the evidence channels (e.g. `c("experiments", "databases")`, or by the column
+    names of the detailed interaction tables, e.g. `"experimental"`) from which STRING computes the
+    combined score (STRING 12.0 or later);
   - `add_color_nodes` and `add_white_nodes` add interaction partners to the network;
   - `show_query_node_labels` labels the proteins with the identifiers given.
 
@@ -40,17 +51,32 @@
   delete it to download the file again.
 - A download of a STRING file may take up to 300 seconds instead of R's default timeout of 60 seconds,
   which cut off the larger files on a slower connection. A higher `options(timeout)` is kept.
+- The note of `map()` about identifiers that could not be mapped ends with a line break, so that the
+  next output no longer continues on its line.
 
 ## Other changes
 
 - The package needs R 4.0.0 or later (`Depends: R (>= 4.0.0)`), for `tools::R_user_dir()`, where it
   keeps the API key.
-- `get_enrichment()` has a `caller_identity` argument, and `get_ppi_enrichment()`, `get_summary()`,
-  `get_paralogs()` and `get_homologs_besthits()` now also send `caller_identity` to STRING.
+- The package itself sends its caller identity, `"STRINGdb-package"`, with every request to STRING's
+  API and every download of STRING's data files. The `caller_identity` argument of `get_png()`, `get_link()`, `get_enrichment_figure()` and
+  `get_geneset_description()` is now ignored, with the default `NULL`, so that code that gives it
+  still runs, with a warning (once per R session). It will be removed in the next Bioconductor
+  release, so do not specify it.
 - Several methods have new arguments. A call that abbreviates an argument name may need the full name,
-  e.g. `c =` for `category` of `get_enrichment()`, or `show =` for `show_regulatory_signs`.
+  e.g. `show =` for `show_regulatory_signs` of `get_link()` and `plot_network()`.
 - igraph's deprecated function names are replaced by their current names.
 - The unit tests that call STRING are deactivated instead of failing when STRING cannot be reached.
+
+## Planned for the next Bioconductor release
+
+- The columns `inputGenes` and `preferredNames` of `get_enrichment()` and
+  `get_values_ranks_enrichment()` will become list columns (a character vector for each term)
+  instead of comma-separated text. Code that splits them with `strsplit()`, or writes the results
+  with `write.csv()` or `write.table()`, will need to change: these take no list columns.
+- The ignored `caller_identity` argument of `get_png()`, `get_link()`, `get_enrichment_figure()` and
+  `get_geneset_description()` will be removed: a call that gives it will then stop with an "unused
+  argument" error.
 
 # STRINGdb 2.25.3
 

@@ -7,7 +7,7 @@ get_enrichment
 Returns the enrichment in pathways of the vector of STRING proteins that is given in input.
 }
 \usage{
-\S4method{get_enrichment}{STRINGdb}(string_ids, category = "All", methodMT = NULL, iea = NULL, minScore = NULL, max_fdr = NULL, min_gene_count = NULL, min_strength = NULL, min_signal = NULL, merge_similarity = NULL, add_scores = FALSE, caller_identity = "STRINGdb-package")
+\S4method{get_enrichment}{STRINGdb}(string_ids, category = "All", methodMT = NULL, iea = NULL, minScore = NULL, max_fdr = NULL, min_gene_count = NULL, min_strength = NULL, min_signal = NULL, merge_similarity = NULL, add_scores = FALSE)
 }
 \arguments{
   \item{string_ids}{
@@ -43,9 +43,6 @@ optional: merges the terms whose protein sets overlap at least this much (above 
   \item{add_scores}{
 \code{TRUE} adds STRING's \code{strength} and \code{signal} columns to the returned table, before \code{p_value}. The default \code{FALSE} returns the table without them.
 }
-  \item{caller_identity}{
-caller identifier sent to STRING.
-}
 }
 \details{
 STRING applies the optional filters like the filters of the enrichment table on its website. Without them (the default \code{NULL}), no term is filtered.
@@ -56,6 +53,7 @@ The filters and \code{add_scores} need STRING version 12.5 or later. An older ve
 }
 \value{
 Data frame containing the enrichment in pathways of the vector of STRING proteins that is given in input.
+Its columns \code{inputGenes} and \code{preferredNames} list the term's proteins as comma-separated text; in the next Bioconductor release they will become list columns (a character vector for each term), here and in \code{get_values_ranks_enrichment}.
 }
 \author{
 Andrea Franceschini

@@ -76,8 +76,10 @@ test_values_ranks_input_preparation <- function() {
     c("9606.A", "9606.B", NA, "", "9606.A", "9606.C", "9606.D"),
     c(1.5, -2, 3, 4, -2.5, NA, Inf)
   )
-  # NA identifier, empty identifier, NA value and infinite value are left out; 9606.A keeps -2.5
-  checkEquals(4, input$n_missing)
+  # NA identifier, empty identifier and NA value are left out, and the infinite value is counted
+  # apart (it gets a warning: test_values_ranks_input_checks); 9606.A keeps -2.5
+  checkEquals(3, input$n_missing)
+  checkEquals(1, input$n_infinite)
   checkEquals(1, input$n_duplicates)
   checkEquals(2, input$n_submitted)
   checkEquals("9606.B\t-2\n9606.A\t-2.5", input$text)
@@ -103,11 +105,6 @@ test_values_ranks_options <- function() {
   checkException(STRINGdb:::normalize_values_ranks_options(NA_real_, "descending"), silent = TRUE)
   checkException(STRINGdb:::normalize_values_ranks_options(0.01, "top"), silent = TRUE)
 
-  # a key given as the argument is used as it is, without surrounding spaces
-  error_message <- tryCatch(STRINGdb:::resolve_values_ranks_api_key(""), error = function(e) conditionMessage(e))
-  checkTrue(grepl("api_key should be one STRING API key", error_message, fixed = TRUE))
-  checkEquals(list(key = "abc", source = "argument"), STRINGdb:::resolve_values_ranks_api_key(" abc "))
-
 }
 
 
@@ -125,7 +122,6 @@ test_values_ranks_submit <- function() {
   checkEquals("key1", request$params$api_key)
   checkEquals("9606", request$params$species)
   checkEquals("9606.A\t1.5", request$params$identifiers)
-  checkEquals("STRINGdb-package", request$params$caller_identity)
   checkEquals("0.05", request$params$ge_fdr)
   checkEquals("-1", request$params$ge_enrichment_rank_direction)
 
@@ -197,7 +193,7 @@ test_values_ranks_wait <- function() {
   send <- fake_string_json(list(status_record("success", "Job finished", "https://example.org/download")), log)
   STRINGdb:::wait_for_values_ranks_job("https://version-12-5.string-db.org", "key1", "job123", 7200, quiet = TRUE, send = send, sleep = fake_waits()$sleep)
   checkEquals("https://version-12-5.string-db.org/api/json/valuesranks_enrichment_status", log$requests[[1]]$url)
-  checkEquals(list(api_key = "key1", job_id = "job123", caller_identity = "STRINGdb-package"), log$requests[[1]]$params)
+  checkEquals(list(api_key = "key1", job_id = "job123"), log$requests[[1]]$params)
 
   # a refused status request (a job of another key, an unknown key) stops at once: asking
   # again cannot help
@@ -287,15 +283,33 @@ test_values_ranks_wait_progress <- function() {
 
 test_values_ranks_results <- function() {
 
+  # the results have the columns of get_enrichment where they mean the same
   results <- STRINGdb:::read_values_ranks_results(values_ranks_tsv, "job123")
+  checkEquals(
+    c("category", "term", "number_of_genes", "number_of_genes_in_background", "inputGenes", "preferredNames",
+      "enrichment_score", "direction", "method", "fdr", "description", "inputValues", "inputRanks"),
+    colnames(results)
+  )
   checkEquals(STRINGdb:::VALUES_RANKS_RESULT_COLUMNS, colnames(results))
   checkEquals(2, nrow(results))
-  checkEquals("DNA repair # and more", results$termDescription[1])
-  checkEquals(c(3L, 2L), results$genesMapped)
-  checkEquals(c(517L, 157L), results$genesInSet)
-  checkEquals(c(1.25, -0.8), results$enrichmentScore)
-  checkEquals(c(0.0012, 0.03), results$falseDiscoveryRate)
+  checkEquals(c("Process", "KEGG"), results$category)
+  checkEquals(c("GO:0006281", "hsa04110"), results$term)
+  checkEquals("DNA repair # and more", results$description[1])
+  checkEquals(c(3L, 2L), results$number_of_genes)
+  checkEquals(c(517L, 157L), results$number_of_genes_in_background)
+  checkEquals(c(1.25, -0.8), results$enrichment_score)
+  checkEquals(c(0.0012, 0.03), results$fdr)
   checkEquals(c("top", "bottom"), results$direction)
+  checkEquals(c("ks", "afc"), results$method)
+
+  # inputGenes and preferredNames are comma-separated text, as in get_enrichment; the values and
+  # ranks are list columns of numbers, in the order of inputGenes
+  checkEquals("9606.A,9606.B,9606.C", results$inputGenes[1])
+  checkEquals("A,B,C", results$preferredNames[1])
+  checkTrue(is.list(results$inputValues) && is.list(results$inputRanks))
+  checkEquals(list(c(2.1, 1.9, 1.5), c(-1.2, -2.2)), results$inputValues)
+  checkEquals(list(1:3, 5:6), results$inputRanks)
+  checkTrue(is.integer(results$inputRanks[[1]]))
 
   # the text columns stay text, also a label that reads as a number or as NA
   numeric_looking <- paste(
@@ -304,16 +318,43 @@ test_values_ranks_results <- function() {
     sep = "\n"
   )
   results <- STRINGdb:::read_values_ranks_results(numeric_looking, "job123")
-  checkEquals("NA", results$termDescription)
-  checkEquals("1", results$proteinLabels)
-  checkEquals("NA", results$proteinInputLabels)
+  checkEquals("NA", results$description)
+  checkEquals("1", results$preferredNames)
 
   # a table without terms has typed columns and no rows
   empty <- STRINGdb:::read_values_ranks_results(strsplit(values_ranks_tsv, "\n")[[1]][1], "job123")
   checkEquals(STRINGdb:::VALUES_RANKS_RESULT_COLUMNS, colnames(empty))
   checkEquals(0, nrow(empty))
-  checkTrue(is.integer(empty$genesMapped))
-  checkTrue(is.numeric(empty$falseDiscoveryRate))
+  checkTrue(is.integer(empty$number_of_genes))
+  checkTrue(is.numeric(empty$fdr))
+  checkTrue(is.list(empty$inputValues))
+
+  # STRING's display names of the categories become the codes of get_enrichment; "Monarch" stands for
+  # the phenotype ontologies, told apart by the prefix of the term; unknown names stay
+  checkEquals(
+    c("Process", "Function", "Component", "Keyword", "RCTM", "PMID", "NetworkNeighborAL", "COMPARTMENTS"),
+    STRINGdb:::values_ranks_category_codes(
+      c("GO Process", "GO Function", "GO Component", "UniProt Keywords", "Reactome", "Publications",
+        "STRING clusters", "COMPARTMENTS"),
+      rep("x", 8)
+    )
+  )
+  checkEquals(
+    c("HPO", "MPO", "DPO", "WPO", "WPO", "ZPO", "FYPO", "Monarch", "New category"),
+    STRINGdb:::values_ranks_category_codes(
+      c(rep("Monarch", 8), "New category"),
+      c("HP:0000118", "MP:0005376", "FBcv:0000347", "WBPhenotype:0000886", "WBP:0000886", "ZP:0000001",
+        "FYPO:0000001", "XX:1", "T1")
+    )
+  )
+
+  # a table without one of STRING's columns is not read as results
+  without_ranks <- sub("\tproteinRanks", "", strsplit(values_ranks_tsv, "\n")[[1]][1])
+  error_message <- tryCatch(
+    STRINGdb:::read_values_ranks_results(without_ranks, "job123"),
+    error = function(e) conditionMessage(e)
+  )
+  checkTrue(grepl("lack the columns proteinRanks", error_message, fixed = TRUE))
 
   # an empty answer is STRING's answer for results it no longer has
   error_message <- tryCatch(STRINGdb:::read_values_ranks_results("", "job123"), error = function(e) conditionMessage(e))
@@ -331,7 +372,6 @@ test_values_ranks_results <- function() {
   }
   results <- STRINGdb:::collect_values_ranks_results("u", "key1", "job123", 7200, quiet = TRUE, send = send, fetch = fetch, sleep = fake_waits()$sleep)
   checkEquals("https://example.org/download", fetched$url)
-  checkEquals(list(caller_identity = "STRINGdb-package"), fetched$query)
   checkEquals(2, nrow(results))
   checkEquals("job123", attr(results, "job_id"))
   checkEquals("https://example.org/page", attr(results, "page_url"))
@@ -348,6 +388,29 @@ test_values_ranks_results <- function() {
   checkTrue(grepl("results of values/ranks job job123 could not be downloaded", error_message, fixed = TRUE))
   checkTrue(grepl("Session Expired", error_message, fixed = TRUE))
   checkTrue(grepl("get_values_ranks_results(\"job123\")", error_message, fixed = TRUE))
+
+  # a download that fails is tried again, a few times
+  attempts <- 0
+  flaky <- function(url_str, query = NULL, timeout_seconds = 300) {
+    attempts <<- attempts + 1
+    if (attempts == 1) {
+      stop("ERROR: STRING's servers answered with HTTP status 502 for ", url_str, call. = FALSE)
+    }
+    return(values_ranks_tsv)
+  }
+  results <- STRINGdb:::collect_values_ranks_results("u", "key1", "job123", 7200, quiet = TRUE, send = send, fetch = flaky,
+                                                     sleep = fake_waits()$sleep)
+  checkEquals(2, attempts)
+  checkEquals(2, nrow(results))
+  attempts <- 0
+  always_failing <- function(url_str, query = NULL, timeout_seconds = 300) {
+    attempts <<- attempts + 1
+    stop("ERROR: STRING's servers answered with HTTP status 502 for ", url_str, call. = FALSE)
+  }
+  tryCatch(STRINGdb:::collect_values_ranks_results("u", "key1", "job123", 7200, quiet = TRUE, send = send,
+                                                   fetch = always_failing, sleep = fake_waits()$sleep),
+    error = function(e) NULL)
+  checkEquals(5, attempts)
 
   # an interrupt during the download says how to get the results later
   send <- fake_string_json(list(status_record("success", "Job finished", "https://example.org/download")))
@@ -373,21 +436,6 @@ test_values_ranks_results <- function() {
   # "&amp;" is decoded last, so a written "&amp;lt;" stays "&lt;"
   checkEquals("&lt;", STRINGdb:::decode_html_entities("&amp;lt;"))
 
-  # get_string_text adds its query to the parameters of the address: httr's GET is traced, and the
-  # tracer stops before any request is sent
-  captured <- new.env()
-  suppressMessages(trace("GET", where = asNamespace("STRINGdb"), print = FALSE,
-    tracer = bquote({
-      assign("url", url, envir = .(captured))
-      assign("query", list(...)$query, envir = .(captured))
-      stop("captured by the test")
-    })))
-  on.exit(suppressMessages(untrace("GET", where = asNamespace("STRINGdb"))), add = TRUE)
-  tryCatch(STRINGdb:::get_string_text("https://example.org/download?networkId=n1", list(caller_identity = "my-tool")),
-    error = function(e) NULL)
-  checkEquals("https://example.org/download?networkId=n1", captured$url)
-  checkEquals(list(caller_identity = "my-tool"), captured$query)
-
 }
 
 
@@ -399,7 +447,7 @@ test_values_ranks_api_key <- function() {
   checkEquals("newkey", key$api_key)
   checkTrue(grepl("activated", key$note, fixed = TRUE))
   checkEquals("https://version-12-5.string-db.org/api/json/get_api_key", log$requests[[1]]$url)
-  checkEquals(list(caller_identity = "STRINGdb-package"), log$requests[[1]]$params)
+  checkEquals(list(), log$requests[[1]]$params)
 
   checkException(STRINGdb:::request_string_api_key("u", send = fake_string_json(list(list()))), silent = TRUE)
 
@@ -411,27 +459,31 @@ test_values_ranks_api_key <- function() {
 
 test_values_ranks_method_checks <- function() {
 
-  # the methods check their input before any request to STRING
+  # the methods check their input before any request to STRING. The object points to an unreachable
+  # address, and the key is a temporary one (STRINGDB_API_KEY), so that a check that does not stop
+  # reaches neither STRING nor the key of this computer.
   string_db <- STRINGdb$new(version = "12.5", species = 9606, score_threshold = 400)
+  string_db$stable_url <- "https://127.0.0.1:9"
 
-  error_message <- tryCatch(string_db$get_values_ranks_enrichment("9606.A", 1, api_key = ""), error = function(e) conditionMessage(e))
-  checkTrue(grepl("api_key should be one STRING API key", error_message, fixed = TRUE))
+  with_temporary_key_file({
+    Sys.setenv(STRINGDB_API_KEY = "key1")
 
-  error_message <- tryCatch(string_db$get_values_ranks_enrichment("9606.A", 1, max_fdr = 0.5, api_key = "key1"), error = function(e) conditionMessage(e))
-  checkTrue(grepl("at most 0.25", error_message, fixed = TRUE))
+    error_message <- tryCatch(string_db$get_values_ranks_enrichment("9606.A", 1, max_fdr = 0.5), error = function(e) conditionMessage(e))
+    checkTrue(grepl("at most 0.25", error_message, fixed = TRUE))
 
-  error_message <- tryCatch(string_db$get_values_ranks_results(c("a", NA), api_key = "key1"), error = function(e) conditionMessage(e))
-  checkTrue(grepl("job_ids should be one or more job identifiers", error_message, fixed = TRUE))
+    error_message <- tryCatch(string_db$get_values_ranks_results(c("a", NA)), error = function(e) conditionMessage(e))
+    checkTrue(grepl("job_ids should be one or more job identifiers", error_message, fixed = TRUE))
 
-  error_message <- tryCatch(string_db$get_values_ranks_status("", api_key = "key1"), error = function(e) conditionMessage(e))
-  checkTrue(grepl("job_ids should be one or more job identifiers", error_message, fixed = TRUE))
+    error_message <- tryCatch(string_db$get_values_ranks_status(""), error = function(e) conditionMessage(e))
+    checkTrue(grepl("job_ids should be one or more job identifiers", error_message, fixed = TRUE))
 
-  # a table of values: one row per identifier, numeric columns
-  error_message <- tryCatch(
-    string_db$submit_values_ranks_enrichment("9606.A", matrix(1:4, ncol = 2), api_key = "key1"),
-    error = function(e) conditionMessage(e)
-  )
-  checkTrue(grepl("one row for each identifier", error_message, fixed = TRUE))
+    # a table of values: one row per identifier, numeric columns
+    error_message <- tryCatch(
+      string_db$submit_values_ranks_enrichment("9606.A", matrix(1:4, ncol = 2)),
+      error = function(e) conditionMessage(e)
+    )
+    checkTrue(grepl("one row for each identifier", error_message, fixed = TRUE))
+  })
 
   error_message <- tryCatch(string_db$get_api_key(new = NA), error = function(e) conditionMessage(e))
   checkTrue(grepl("new should be TRUE or FALSE", error_message, fixed = TRUE))
@@ -441,9 +493,9 @@ test_values_ranks_method_checks <- function() {
 
 test_values_ranks_method_requests <- function() {
 
-  # get_values_ranks_enrichment, get_values_ranks_results and get_api_key send their caller_identity with every request, and
-  # get_api_key asks by POST. The transport functions are replaced for this test (and restored at its
-  # end), and the object points to an unreachable address, so that no request can reach STRING.
+  # the requests of get_values_ranks_enrichment, get_values_ranks_results and get_api_key (which
+  # asks by POST). The transport functions are replaced for this test (and restored at its end),
+  # and the object points to an unreachable address, so that no request can reach STRING.
   requests <- list()
   fake_post <- function(url_str, params, timeout_seconds = 60) {
     requests[[length(requests) + 1]] <<- list(url = url_str, params = params)
@@ -469,33 +521,35 @@ test_values_ranks_method_requests <- function() {
   string_db <- STRINGdb$new(version = "12.5", species = 9606, score_threshold = 400)
   string_db$stable_url <- "https://127.0.0.1:9"
 
-  results <- string_db$get_values_ranks_enrichment(c("9606.A", "9606.B"), c(1.5, -2), api_key = "key1", quiet = TRUE, caller_identity = "my-tool")
-  checkEquals(2, nrow(results))
-  checkEquals(
-    c("https://127.0.0.1:9/api/json/valuesranks_enrichment_submit", "https://127.0.0.1:9/api/json/valuesranks_enrichment_status",
-      "https://example.org/download"),
-    sapply(requests, function(request) request$url)
-  )
-  for (request in requests) {
-    checkEquals("my-tool", request$params$caller_identity)
-  }
+  # the key of STRINGDB_API_KEY (a temporary setting) is the key of the requests
+  with_temporary_key_file({
+    Sys.setenv(STRINGDB_API_KEY = "key1")
+    results <- string_db$get_values_ranks_enrichment(c("9606.A", "9606.B"), c(1.5, -2), quiet = TRUE)
+    checkEquals(2, nrow(results))
+    checkEquals(
+      c("https://127.0.0.1:9/api/json/valuesranks_enrichment_submit", "https://127.0.0.1:9/api/json/valuesranks_enrichment_status",
+        "https://example.org/download"),
+      sapply(requests, function(request) request$url)
+    )
+    checkEquals("key1", requests[[1]]$params$api_key)
+    # the default FDR cutoff
+    checkEquals("0.05", requests[[1]]$params$ge_fdr)
 
-  requests <- list()
-  string_db$get_values_ranks_results("job123", api_key = "key1", quiet = TRUE, caller_identity = "my-tool")
-  checkEquals(2, length(requests))
-  for (request in requests) {
-    checkEquals("my-tool", request$params$caller_identity)
-  }
+    requests <- list()
+    string_db$get_values_ranks_results("job123", quiet = TRUE)
+    checkEquals(2, length(requests))
+    checkEquals("key1", requests[[1]]$params$api_key)
+  })
 
-  # get_api_key requests a key only when this computer has none (here a temporary key file), with
-  # the package's caller identity, so that the key works at once
+
+  # get_api_key requests a key only when this computer has none (here a temporary key file)
   with_temporary_key_file({
     requests <- list()
     key <- suppressMessages(string_db$get_api_key())
     checkEquals("newkey", key)
     checkEquals(1, length(requests))
     checkEquals("https://127.0.0.1:9/api/json/get_api_key", requests[[1]]$url)
-    checkEquals(list(caller_identity = "STRINGdb-package"), requests[[1]]$params)
+    checkEquals(list(), requests[[1]]$params)
   })
 
 }
@@ -586,33 +640,31 @@ test_values_ranks_api_key_sources <- function() {
     key_file <- STRINGdb:::values_ranks_key_file()
     checkTrue(startsWith(key_file, Sys.getenv("R_USER_CONFIG_DIR")))
 
-    # without a key, the methods that submit request one, with the package's caller identity
-    # (with which STRING makes it work at once), and save it
+    # without a key, the methods that submit request one and save it
     log <- new.env()
     send <- fake_values_ranks_server(log = log)
-    key_info <- suppressMessages(STRINGdb:::resolve_values_ranks_api_key(NULL, "https://s", send = send))
+    key_info <- suppressMessages(STRINGdb:::resolve_values_ranks_api_key("https://s", send = send))
     checkEquals(list(key = "newkey", source = "new"), key_info)
     checkEquals("https://s/api/json/get_api_key", log$requests[[1]]$url)
-    checkEquals(list(caller_identity = "STRINGdb-package"), log$requests[[1]]$params)
+    checkEquals(list(), log$requests[[1]]$params)
     checkEquals("newkey", STRINGdb:::read_saved_api_key(key_file))
     if (.Platform$OS.type == "unix") {
       checkEquals("600", format(file.info(key_file)$mode))
     }
 
     # then the saved key is used, without another request
-    checkEquals(list(key = "newkey", source = "saved"), STRINGdb:::resolve_values_ranks_api_key(NULL, "https://s", send = send))
+    checkEquals(list(key = "newkey", source = "saved"), STRINGdb:::resolve_values_ranks_api_key("https://s", send = send))
     checkEquals(1, length(log$requests))
 
-    # STRINGDB_API_KEY comes before the saved key, and the argument before both
+    # STRINGDB_API_KEY comes before the saved key
     Sys.setenv(STRINGDB_API_KEY = " envkey ")
-    checkEquals(list(key = "envkey", source = "environment"), STRINGdb:::resolve_values_ranks_api_key(NULL, "https://s", send = send))
-    checkEquals(list(key = "argkey", source = "argument"), STRINGdb:::resolve_values_ranks_api_key("argkey", "https://s", send = send))
+    checkEquals(list(key = "envkey", source = "environment"), STRINGdb:::resolve_values_ranks_api_key("https://s", send = send))
     Sys.unsetenv("STRINGDB_API_KEY")
 
     # the methods that read jobs never request a key: a new key cannot read the jobs of another
     unlink(key_file)
     error_message <- tryCatch(
-      STRINGdb:::resolve_values_ranks_api_key(NULL, "https://s", request_new = FALSE, send = send),
+      STRINGdb:::resolve_values_ranks_api_key("https://s", request_new = FALSE, send = send),
       error = function(e) conditionMessage(e)
     )
     checkTrue(grepl("no STRING API key on this computer", error_message, fixed = TRUE))
@@ -659,7 +711,7 @@ test_values_ranks_saved_key_replaced <- function() {
       }
       return(list(list(job_id = "job9", status = "submitted", message = "")))
     }
-    key_info <- STRINGdb:::resolve_values_ranks_api_key(NULL, "https://s", send = send)
+    key_info <- STRINGdb:::resolve_values_ranks_api_key("https://s", send = send)
     options <- STRINGdb:::normalize_values_ranks_options(0.01, "descending")
     warned <- character(0)
     submission <- suppressMessages(withCallingHandlers(
@@ -681,7 +733,7 @@ test_values_ranks_saved_key_replaced <- function() {
 
     # a key given by the user is not replaced: the refusal stops
     error_message <- tryCatch(
-      STRINGdb:::submit_first_values_ranks_job("https://s", 9606, "9606.A\t1", list(key = "oldkey", source = "argument"), options, send = send),
+      STRINGdb:::submit_first_values_ranks_job("https://s", 9606, "9606.A\t1", list(key = "oldkey", source = "environment"), options, send = send),
       error = function(e) conditionMessage(e)
     )
     checkTrue(grepl("Api key does not exist", error_message, fixed = TRUE))
@@ -708,7 +760,7 @@ test_values_ranks_saved_key_replaced <- function() {
       }
       return(list(list(job_id = "job7", status = "submitted", message = "")))
     }
-    key_info <- STRINGdb:::resolve_values_ranks_api_key(NULL, "https://s", send = send)
+    key_info <- STRINGdb:::resolve_values_ranks_api_key("https://s", send = send)
     options <- STRINGdb:::normalize_values_ranks_options(0.01, "descending")
     submission <- STRINGdb:::submit_first_values_ranks_job("https://s", 9606, "9606.A\t1", key_info, options, quiet = TRUE, send = send)
     checkEquals("job7", submission$job_id)
@@ -784,15 +836,35 @@ test_values_ranks_job_ids_and_states <- function() {
     list(job_id = "j1", creation_time = "2026-11-05 12:00:00", status = "success", message = "", download_url = "https://d/1"),
     list(job_id = "j2", creation_time = "2026-11-05 12:01:00", status = "failure.", message = "It failed.")
   )), log)
-  states <- STRINGdb:::get_values_ranks_jobs_states("https://s", "key1", "my-tool", send = send)
+  states <- STRINGdb:::get_values_ranks_jobs_states("https://s", "key1", send = send)
   checkEquals(c("j1", "j2"), names(states))
   checkEquals("failure", states$j2$status)
   checkEquals("https://d/1", states$j1$download_url)
-  checkEquals(list(api_key = "key1", caller_identity = "my-tool"), log$requests[[1]]$params)
+  checkEquals(list(api_key = "key1"), log$requests[[1]]$params)
 
   table <- STRINGdb:::values_ranks_status_table(c(A = "j1", B = "j2", C = "j3"), states)
   checkEquals(c("experiment", "job_id", "status", "message", "creation_time"), colnames(table))
-  checkEquals(c("success", "failure", "unknown"), table$status)
+  checkEquals(c("success", "failed", "unknown"), table$status)
+
+  # STRING's own states are reported as one of a fixed set
+  raw_states <- c("submitted", "preparing", "running", "success", "done", "error", "failure.", "failed", "expired", "new state")
+  checkEquals(
+    c("submitted", "submitted", "running", "success", "success", "failed", "failed", "failed", "failed", "running"),
+    vapply(raw_states, STRINGdb:::values_ranks_status_of, character(1), USE.NAMES = FALSE)
+  )
+
+  # without job ids, all jobs that STRING lists for the key, oldest first; no jobs give no rows
+  newest_first <- list(
+    j2 = list(status = "running", message = "", creation_time = "2026-11-05 12:01:00"),
+    j1 = list(status = "success", message = "", creation_time = "2026-11-05 12:00:00")
+  )
+  all_jobs <- STRINGdb:::values_ranks_status_table(NULL, newest_first)
+  checkEquals(c("j1", "j2"), all_jobs$job_id)
+  checkEquals(c("success", "running"), all_jobs$status)
+  checkTrue(all(is.na(all_jobs$experiment)))
+  no_jobs <- STRINGdb:::values_ranks_status_table(NULL, list())
+  checkEquals(0, nrow(no_jobs))
+  checkEquals(c("experiment", "job_id", "status", "message", "creation_time"), colnames(no_jobs))
   checkEquals(c("A", "B", "C"), table$experiment)
   checkTrue(is.na(table$creation_time[3]))
   checkTrue(all(is.na(STRINGdb:::values_ranks_status_table("j1", states)$experiment)))
@@ -810,7 +882,7 @@ test_values_ranks_job_ids_and_states <- function() {
 test_values_ranks_run_jobs <- function() {
 
   options <- STRINGdb:::normalize_values_ranks_options(0.01, "descending")
-  key_info <- list(key = "key1", source = "argument")
+  key_info <- list(key = "key1", source = "environment")
 
   # all experiments are submitted before the wait, one status request per round reports all jobs,
   # and each job's results are downloaded once it has finished
@@ -879,6 +951,7 @@ test_values_ranks_run_jobs <- function() {
   checkTrue(is.data.frame(results$C))
   checkEquals(run$job_ids, attr(results, "job_ids"))
   checkTrue(grepl("1 values/ranks experiments failed: B:", warned, fixed = TRUE))
+  checkEquals(c(A = "success", B = "failed", C = "success"), attr(results, "status"))
 
   # a refusal of the first submission (e.g. a wrong key) stops before any job is submitted
   wrong_key <- fake_string_json(list(list(list(job_id = "", status = "error", message = "Api key does not exist."))))
@@ -900,7 +973,7 @@ test_values_ranks_run_jobs_timeout <- function() {
   options <- STRINGdb:::normalize_values_ranks_options(0.01, "descending")
   waits <- fake_waits()
   run <- STRINGdb:::run_values_ranks_jobs(
-    "https://s", 9606, three_experiments()$experiments, list(key = "key1", source = "argument"), options,
+    "https://s", 9606, three_experiments()$experiments, list(key = "key1", source = "environment"), options,
     timeout_seconds = 5, quiet = TRUE, send = fake_values_ranks_server(rounds = 2, limit = 2, slow = "job2"),
     fetch = fake_download(), sleep = waits$sleep, clock = waits$clock
   )
@@ -922,6 +995,7 @@ test_values_ranks_run_jobs_timeout <- function() {
   checkEquals(c(A = "job1", B = "job2"), attr(results, "job_ids"))
   # the column numbers of the experiments not submitted, named by experiment
   checkEquals(c(C = 3L), attr(results, "not_submitted"))
+  checkEquals(c(A = "success", B = "unfinished", C = "not submitted"), attr(results, "status"))
   checkEquals(2, length(warned))
   checkTrue(grepl("1 of 2 values/ranks jobs did not finish", warned[1], fixed = TRUE))
   checkTrue(grepl("within 5 seconds", warned[1], fixed = TRUE))
@@ -931,7 +1005,7 @@ test_values_ranks_run_jobs_timeout <- function() {
   # nothing submitted when the timeout ends the wait: no warning about unfinished jobs
   waits <- fake_waits()
   run <- STRINGdb:::run_values_ranks_jobs(
-    "https://s", 9606, three_experiments()$experiments, list(key = "key1", source = "argument"), options,
+    "https://s", 9606, three_experiments()$experiments, list(key = "key1", source = "environment"), options,
     timeout_seconds = 5, quiet = TRUE, send = fake_values_ranks_server(limit = 0),
     fetch = fake_download(), sleep = waits$sleep, clock = waits$clock
   )
@@ -946,6 +1020,7 @@ test_values_ranks_run_jobs_timeout <- function() {
   checkEquals(1, length(warned))
   checkTrue(grepl("3 experiments were not submitted", warned, fixed = TRUE))
   checkEquals(c(A = 1L, B = 2L, C = 3L), attr(results, "not_submitted"))
+  checkEquals(c(A = "not submitted", B = "not submitted", C = "not submitted"), attr(results, "status"))
 
   # submissions that keep failing (HTTP 503) are given up, without losing the jobs submitted
   # before: the wait goes on for them, and the others are not submitted
@@ -963,13 +1038,44 @@ test_values_ranks_run_jobs_timeout <- function() {
   }
   waits <- fake_waits()
   run <- STRINGdb:::run_values_ranks_jobs(
-    "https://s", 9606, three_experiments()$experiments, list(key = "key1", source = "argument"), options,
+    "https://s", 9606, three_experiments()$experiments, list(key = "key1", source = "environment"), options,
     quiet = TRUE, send = failing_later, fetch = fake_download(), sleep = waits$sleep, clock = waits$clock
   )
   checkEquals(c("A", "B"), sort(names(run$results)))
   checkEquals("C", names(run$pending))
   checkTrue(grepl("kept failing", run$held_back, fixed = TRUE))
   checkTrue(!run$timed_out)
+
+  # without waiting, a submission request that fails is tried again, as with waiting, and one that
+  # keeps failing is given up
+  failing_once <- function(url_str, params, timeout_seconds = 60) {
+    if (grepl("submit", url_str, fixed = TRUE)) {
+      log$submissions <- log$submissions + 1
+      if (log$submissions == 2) {
+        stop("Timeout was reached: Operation timed out")
+      }
+    }
+    return(server(url_str, params, timeout_seconds))
+  }
+  log$submissions <- 0
+  server <- fake_values_ranks_server(rounds = 1)
+  run <- STRINGdb:::run_values_ranks_jobs(
+    "https://s", 9606, three_experiments()$experiments, list(key = "key1", source = "environment"), options,
+    wait = FALSE, quiet = TRUE, send = failing_once, fetch = fake_download(), sleep = fake_waits()$sleep
+  )
+  checkEquals(c("A", "B", "C"), names(run$job_ids))
+  checkEquals(0, length(run$pending))
+  checkEquals(4, log$submissions)
+
+  log$submissions <- 0
+  server <- fake_values_ranks_server(rounds = 1)
+  run <- STRINGdb:::run_values_ranks_jobs(
+    "https://s", 9606, three_experiments()$experiments, list(key = "key1", source = "environment"), options,
+    wait = FALSE, quiet = TRUE, send = failing_later, fetch = fake_download(), sleep = fake_waits()$sleep
+  )
+  checkEquals(c("A", "B"), names(run$job_ids))
+  checkEquals("C", names(run$pending))
+  checkTrue(grepl("kept failing", run$held_back, fixed = TRUE))
 
   # a lost connection ends the wait with an error; the job ids that the caller gave are not
   # listed again
@@ -979,7 +1085,7 @@ test_values_ranks_run_jobs_timeout <- function() {
   error_message <- tryCatch(
     withCallingHandlers(
       STRINGdb:::run_values_ranks_jobs(
-        "https://s", 9606, list(), list(key = "key1", source = "argument"), job_ids = c(A = "job1"),
+        "https://s", 9606, list(), list(key = "key1", source = "environment"), job_ids = c(A = "job1"),
         quiet = TRUE, job_ids_known = TRUE, send = lost, fetch = fake_download(),
         sleep = waits$sleep, clock = waits$clock
       ),
@@ -999,7 +1105,7 @@ test_values_ranks_run_jobs_timeout <- function() {
 test_values_ranks_run_jobs_interrupted <- function() {
 
   options <- STRINGdb:::normalize_values_ranks_options(0.01, "descending")
-  key_info <- list(key = "key1", source = "argument")
+  key_info <- list(key = "key1", source = "environment")
 
   # an interrupt during the submissions (curl stops the request with an error) lists the jobs
   # submitted so far
@@ -1087,7 +1193,7 @@ test_values_ranks_run_jobs_download_retried <- function() {
   }
   waits <- fake_waits()
   run <- STRINGdb:::run_values_ranks_jobs(
-    "https://s", 9606, three_experiments()$experiments, list(key = "key1", source = "argument"), options,
+    "https://s", 9606, three_experiments()$experiments, list(key = "key1", source = "environment"), options,
     quiet = TRUE, send = fake_values_ranks_server(rounds = 1), fetch = flaky_download,
     sleep = waits$sleep, clock = waits$clock
   )
@@ -1131,7 +1237,7 @@ test_values_ranks_key_replacement_safe <- function() {
       }
       return(server(url_str, params, timeout_seconds))
     }
-    key_info <- STRINGdb:::resolve_values_ranks_api_key(NULL, "https://s", send = send)
+    key_info <- STRINGdb:::resolve_values_ranks_api_key("https://s", send = send)
     waits <- fake_waits()
     run <- suppressWarnings(suppressMessages(STRINGdb:::run_values_ranks_jobs(
       "https://s", 9606, three_experiments()$experiments, key_info, options, quiet = TRUE,
@@ -1155,7 +1261,7 @@ test_values_ranks_key_replacement_safe <- function() {
       }
       return(list(list(job_id = "", status = "error", message = "Api key does not exist. Please use a valid key or generate a new one.")))
     }
-    key_info <- STRINGdb:::resolve_values_ranks_api_key(NULL, "https://s", send = send)
+    key_info <- STRINGdb:::resolve_values_ranks_api_key("https://s", send = send)
     error_message <- suppressMessages(tryCatch(
       STRINGdb:::run_values_ranks_jobs("https://s", 9606, three_experiments()$experiments, key_info, options,
                                        quiet = TRUE, send = send, fetch = fake_download()),
@@ -1212,16 +1318,14 @@ test_values_ranks_methods_several <- function() {
 
   with_temporary_key_file({
     # synchronous: a named list of results; without a key, one is requested and saved first
-    results <- suppressMessages(string_db$get_values_ranks_enrichment(string_ids, values, caller_identity = "my-tool"))
+    results <- suppressMessages(string_db$get_values_ranks_enrichment(string_ids, values))
     checkEquals(c("up", "down"), names(results))
     checkTrue(all(vapply(results, is.data.frame, logical(1))))
     checkEquals(c(up = "job1", down = "job2"), attr(results, "job_ids"))
-    key_requests <- requests_to(log, "get_api_key")
-    checkEquals(1, length(key_requests))
-    checkEquals("STRINGdb-package", key_requests[[1]]$params$caller_identity)
+    checkEquals(c(up = "success", down = "success"), attr(results, "status"))
+    checkEquals(1, length(requests_to(log, "get_api_key")))
     for (request in requests_to(log, "valuesranks")) {
       checkEquals("newkey", request$params$api_key)
-      checkEquals("my-tool", request$params$caller_identity)
     }
     checkEquals("newkey", STRINGdb:::read_saved_api_key(STRINGdb:::values_ranks_key_file()))
 
@@ -1234,6 +1338,7 @@ test_values_ranks_methods_several <- function() {
     results <- string_db$get_values_ranks_results(job_ids, quiet = TRUE)
     checkEquals(c("up", "down"), names(results))
     checkEquals("job4", attr(results$down, "job_id"))
+    checkEquals(c(up = "success", down = "success"), attr(results, "status"))
     checkEquals(1, length(requests_to(log, "get_api_key")))
 
     # one job id without a name gives a data frame, several without names a list named by job id
@@ -1243,6 +1348,19 @@ test_values_ranks_methods_several <- function() {
     # a vector of values: one job id, without a name
     job_id <- string_db$submit_values_ranks_enrichment(string_ids, values$up, quiet = TRUE)
     checkEquals("job5", job_id)
+
+    # a table of one column has job ids named by experiment, whose results are a list, as
+    # get_values_ranks_enrichment gives for such a table
+    one_column_ids <- string_db$submit_values_ranks_enrichment(string_ids, values[, "up", drop = FALSE], quiet = TRUE)
+    checkEquals("up", names(one_column_ids))
+    one_column_results <- string_db$get_values_ranks_results(one_column_ids, quiet = TRUE)
+    checkTrue(is.list(one_column_results) && !is.data.frame(one_column_results))
+    checkEquals("up", names(one_column_results))
+
+    # without job ids, the states of all jobs of the key
+    all_jobs <- string_db$get_values_ranks_status()
+    checkTrue(all(c("job1", "job2", "job3", "job4", "job5", "job6") %in% all_jobs$job_id))
+    checkTrue(all(is.na(all_jobs$experiment)))
 
     # STRING takes only one more job: the other experiment is named in the attribute not_submitted,
     # and a short warning says why
@@ -1373,7 +1491,7 @@ test_values_ranks_get_api_key <- function() {
 test_values_ranks_single_waits_and_long_hint <- function() {
 
   options <- STRINGdb:::normalize_values_ranks_options(0.01, "descending")
-  key_info <- list(key = "key1", source = "argument")
+  key_info <- list(key = "key1", source = "environment")
 
   # one experiment that STRING cannot take now (its limit of active jobs) is submitted as soon as
   # STRING takes it, within the timeout
@@ -1440,5 +1558,213 @@ test_values_ranks_single_waits_and_long_hint <- function() {
 
   # a few job ids are listed in the message itself
   checkTrue(grepl("c(A = \"job1\", B = \"job2\")", STRINGdb:::values_ranks_jobs_hint(c(A = "job1", B = "job2")), fixed = TRUE))
+
+}
+
+
+
+test_values_ranks_input_alone <- function() {
+
+  # a numeric vector named by STRING identifiers
+  input <- STRINGdb:::values_ranks_input_of(c("9606.A" = 1.5, "9606.B" = -2))
+  checkEquals(c("9606.A", "9606.B"), input$string_ids)
+  checkEquals(c(1.5, -2), input$values)
+
+  # also given as values, without string_ids
+  checkEquals(input, STRINGdb:::values_ranks_input_of(NULL, c("9606.A" = 1.5, "9606.B" = -2)))
+
+  # a matrix or a data frame with STRING identifiers as row names
+  table <- matrix(c(1, 2, 3, 4), ncol = 2, dimnames = list(c("9606.A", "9606.B"), c("up", "down")))
+  input <- STRINGdb:::values_ranks_input_of(table)
+  checkEquals(c("9606.A", "9606.B"), input$string_ids)
+  checkEquals(table, input$values)
+  input <- STRINGdb:::values_ranks_input_of(as.data.frame(table))
+  checkEquals(c("9606.A", "9606.B"), input$string_ids)
+
+  # both given: as before
+  input <- STRINGdb:::values_ranks_input_of(c("9606.A", "9606.B"), c(1, 2))
+  checkEquals(c(1, 2), input$values)
+
+  # without names, the identifiers are unknown
+  error_message <- tryCatch(STRINGdb:::values_ranks_input_of(c(1.5, -2)), error = function(e) conditionMessage(e))
+  checkTrue(grepl("have no names", error_message, fixed = TRUE) && grepl("setNames", error_message, fixed = TRUE))
+  error_message <- tryCatch(STRINGdb:::values_ranks_input_of(data.frame(up = 1:2)), error = function(e) conditionMessage(e))
+  checkTrue(grepl("no row names", error_message, fixed = TRUE))
+  error_message <- tryCatch(STRINGdb:::values_ranks_input_of(c("9606.A", "9606.B")), error = function(e) conditionMessage(e))
+  checkTrue(grepl("should be numeric", error_message, fixed = TRUE))
+  error_message <- tryCatch(STRINGdb:::values_ranks_input_of(), error = function(e) conditionMessage(e))
+  checkTrue(grepl("no values to rank", error_message, fixed = TRUE))
+
+  # the methods take the values alone: one job for a named vector, one per column for a table
+  log <- new.env()
+  original_post <- get("post_string_json", envir = asNamespace("STRINGdb"))
+  assignInNamespace("post_string_json", fake_values_ranks_server(log = log), ns = "STRINGdb")
+  on.exit(assignInNamespace("post_string_json", original_post, ns = "STRINGdb"), add = TRUE)
+  string_db <- STRINGdb$new(version = "12.5", species = 9606, score_threshold = 400)
+  string_db$stable_url <- "https://127.0.0.1:9"
+
+  with_temporary_key_file({
+    Sys.setenv(STRINGDB_API_KEY = "key1")
+    job_id <- string_db$submit_values_ranks_enrichment(c("9606.A" = 1.5, "9606.B" = -2), quiet = TRUE)
+    checkEquals("job1", job_id)
+    checkEquals("9606.A\t1.5\n9606.B\t-2", requests_to(log, "submit")[[1]]$params$identifiers)
+
+    job_ids <- string_db$submit_values_ranks_enrichment(values = table, quiet = TRUE)
+    checkEquals(c(up = "job2", down = "job3"), job_ids)
+    checkEquals("9606.A\t3\n9606.B\t4", requests_to(log, "submit")[[3]]$params$identifiers)
+  })
+
+}
+
+
+test_values_ranks_input_alone_more <- function() {
+
+  # row names that are the numbers of the rows are not STRING identifiers: those that a data frame
+  # keeps after subsetting, its automatic ones, and a matrix's digits
+  subsetted <- subset(data.frame(up = 1:4, down = 4:1), up != 2)
+  for (table in list(subsetted, data.frame(up = 1:2), as.matrix(subsetted), matrix(1:4, 2))) {
+    error_message <- tryCatch(STRINGdb:::values_ranks_input_of(table), error = function(e) conditionMessage(e))
+    checkTrue(grepl("no row names that could be STRING identifiers", error_message, fixed = TRUE))
+  }
+  real_names <- data.frame(up = 1:2, row.names = c("9606.A", "9606.B"))
+  checkEquals(c("9606.A", "9606.B"), STRINGdb:::values_ranks_input_of(real_names)$string_ids)
+
+  # a named 1-d array, as tapply gives it (also sorted), is a named vector
+  ranked <- sort(tapply(c(1, -2, 3, 7), c("9606.B", "9606.A", "9606.C", "9606.B"), mean), decreasing = TRUE)
+  input <- STRINGdb:::values_ranks_input_of(ranked)
+  checkEquals(c("9606.B", "9606.C", "9606.A"), input$string_ids)
+  checkEquals(c(4, 3, -2), input$values)
+  checkTrue(is.null(dim(input$values)))
+
+  # values given alone, followed by an option by position, are not taken for identifiers and values
+  error_message <- tryCatch(
+    STRINGdb:::values_ranks_input_of(c("9606.A" = 1, "9606.B" = 2), 0.05),
+    error = function(e) conditionMessage(e)
+  )
+  checkTrue(grepl("give the other options by name", error_message, fixed = TRUE))
+
+  # get_values_ranks_enrichment with the values alone: the job of the named vector, and its results
+  log <- new.env()
+  original_post <- get("post_string_json", envir = asNamespace("STRINGdb"))
+  original_get_text <- get("get_string_text", envir = asNamespace("STRINGdb"))
+  assignInNamespace("post_string_json", function(url_str, params, timeout_seconds = 60) {
+    log$requests[[length(log$requests) + 1]] <- list(url = url_str, params = params)
+    if (grepl("submit", url_str, fixed = TRUE)) {
+      return(list(list(job_id = "job123", status = "submitted", message = "")))
+    }
+    return(status_record("success", "", "https://example.org/download"))
+  }, ns = "STRINGdb")
+  assignInNamespace("get_string_text", function(url_str, query = NULL, timeout_seconds = 300) values_ranks_tsv, ns = "STRINGdb")
+  on.exit(assignInNamespace("post_string_json", original_post, ns = "STRINGdb"), add = TRUE)
+  on.exit(assignInNamespace("get_string_text", original_get_text, ns = "STRINGdb"), add = TRUE)
+  log$requests <- list()
+
+  string_db <- STRINGdb$new(version = "12.5", species = 9606, score_threshold = 400)
+  string_db$stable_url <- "https://127.0.0.1:9"
+  results <- with_temporary_key_file({
+    Sys.setenv(STRINGDB_API_KEY = "key1")
+    string_db$get_values_ranks_enrichment(c("9606.A" = 1.5, "9606.B" = -2), quiet = TRUE)
+  })
+  checkEquals(2, nrow(results))
+  checkEquals(STRINGdb:::VALUES_RANKS_RESULT_COLUMNS, colnames(results))
+  checkEquals("9606.A\t1.5\n9606.B\t-2", log$requests[[1]]$params$identifiers)
+
+}
+
+
+test_values_ranks_bundled_sample <- function() {
+
+  # the vignette's sample has the current format of the results: same columns, same types
+  sample_rows <- readRDS(system.file("extdata", "values_ranks_example.rds", package = "STRINGdb"))
+  checkTrue(is.data.frame(sample_rows) && nrow(sample_rows) > 0)
+  checkEquals(STRINGdb:::VALUES_RANKS_RESULT_COLUMNS, colnames(sample_rows))
+  current <- STRINGdb:::read_values_ranks_results(values_ranks_tsv, "job123")
+  checkEquals(lapply(current, class), lapply(sample_rows, class))
+  checkTrue(all(lengths(sample_rows$inputValues) == sample_rows$number_of_genes))
+  checkTrue(all(sample_rows$category %in% c(STRINGdb:::VALUES_RANKS_CATEGORY_CODES, STRINGdb:::VALUES_RANKS_PHENOTYPE_PREFIXES)))
+
+}
+
+
+test_values_ranks_input_checks <- function() {
+
+  # string_ids and values are paired by position: values named by STRING identifiers in another
+  # order stop; names in the same order, or names that are other identifiers, do not
+  ids <- c("9606.A", "9606.B", "9606.C")
+  error_message <- tryCatch(
+    STRINGdb:::values_ranks_input_of(ids, c("9606.C" = 1, "9606.B" = 2, "9606.A" = 3)),
+    error = function(e) conditionMessage(e)
+  )
+  checkTrue(grepl("paired by position", error_message, fixed = TRUE))
+  reordered_table <- matrix(1:6, nrow = 3, dimnames = list(rev(ids), c("x", "y")))
+  checkException(STRINGdb:::values_ranks_input_of(ids, reordered_table), silent = TRUE)
+  checkEquals(ids, STRINGdb:::values_ranks_input_of(ids, c("9606.A" = 1, "9606.B" = 2, "9606.C" = 3))$string_ids)
+  checkEquals(ids, STRINGdb:::values_ranks_input_of(ids, c(TP53 = 1, MYC = 2, EGFR = 3))$string_ids)
+  checkEquals(ids, STRINGdb:::values_ranks_input_of(ids, data.frame(x = 1:3, y = 3:1))$string_ids)
+
+  # values that are all NA say so
+  error_message <- tryCatch(STRINGdb:::values_ranks_input_of(values = c(a = NA, b = NA)), error = function(e) conditionMessage(e))
+  checkTrue(grepl("all NA", error_message, fixed = TRUE))
+  error_message <- tryCatch(STRINGdb:::prepare_values_ranks_input(ids, c(NA, NA, NA)), error = function(e) conditionMessage(e))
+  checkTrue(grepl("all NA", error_message, fixed = TRUE))
+
+  # infinite values (e.g. -log10 of a p-value of 0) are left out with a warning, also with
+  # quiet = TRUE, for a vector and for a table; NA values are left out without one
+  warned <- character(0)
+  remember_warning <- function(w) {
+    warned <<- c(warned, conditionMessage(w))
+    invokeRestart("muffleWarning")
+  }
+  prepared <- withCallingHandlers(STRINGdb:::prepare_values_ranks_experiments(ids, c(Inf, -Inf, 1)), warning = remember_warning)
+  checkEquals(1, prepared$experiments[[1]]$n_submitted)
+  checkEquals(1, length(warned))
+  checkTrue(grepl("2 infinite values were left out, with their proteins", warned, fixed = TRUE))
+
+  warned <- character(0)
+  table_values <- data.frame(x = c(Inf, 1, 2), y = c(1, 2, 3))
+  withCallingHandlers(STRINGdb:::prepare_values_ranks_experiments(ids, table_values), warning = remember_warning)
+  checkEquals(1, length(warned))
+  checkTrue(grepl("1 infinite value was left out in 1 of 2 experiments, with its protein", warned, fixed = TRUE))
+
+  warned <- character(0)
+  withCallingHandlers(STRINGdb:::prepare_values_ranks_experiments(ids, c(NA, 1, 2)), warning = remember_warning)
+  checkEquals(0, length(warned))
+
+  # quiet is TRUE or FALSE
+  checkException(STRINGdb:::check_values_ranks_quiet(NA), silent = TRUE)
+  checkException(STRINGdb:::check_values_ranks_quiet("yes"), silent = TRUE)
+  checkTrue(is.null(STRINGdb:::check_values_ranks_quiet(FALSE)))
+
+}
+
+
+test_values_ranks_needs_string_12 <- function() {
+
+  # STRING's values/ranks API and its API keys exist since version 12.0: with an older version
+  # the methods stop before any request
+  requests <- 0
+  original_post <- get("post_string_json", envir = asNamespace("STRINGdb"))
+  assignInNamespace("post_string_json", function(url_str, params, timeout_seconds = 60) {
+    requests <<- requests + 1
+    stop("no request expected")
+  }, ns = "STRINGdb")
+  on.exit(assignInNamespace("post_string_json", original_post, ns = "STRINGdb"), add = TRUE)
+
+  string_db <- suppressWarnings(suppressMessages(STRINGdb$new(version = "11.5", species = 9606, score_threshold = 400)))
+  string_db$stable_url <- "https://127.0.0.1:9"
+  with_temporary_key_file({
+    calls <- list(
+      function() string_db$get_values_ranks_enrichment(c("9606.A", "9606.B"), c(1, -1)),
+      function() string_db$submit_values_ranks_enrichment(c("9606.A", "9606.B"), c(1, -1)),
+      function() string_db$get_values_ranks_status("job1"),
+      function() string_db$get_values_ranks_results("job1"),
+      function() string_db$get_api_key(new = TRUE)
+    )
+    for (call in calls) {
+      error_message <- tryCatch(call(), error = function(e) conditionMessage(e))
+      checkTrue(grepl("needs STRING version 12.0 or later; this object uses version 11.5", error_message, fixed = TRUE))
+    }
+  })
+  checkEquals(0, requests)
 
 }

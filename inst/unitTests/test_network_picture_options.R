@@ -14,6 +14,12 @@ test_normalize_evidence_channels <- function() {
   selected <- STRINGdb:::normalize_evidence_channels(c("Experiments", "databases", "experiments"))
   checkEquals(unlist(selected, use.names = FALSE), c("off", "off", "off", "off", "on", "on", "off"))
 
+  # The column names of the interaction tables with link_data = "detailed" stand for their channels.
+  checkEquals(
+    STRINGdb:::normalize_evidence_channels(c("experiments", "databases", "cooccurrence")),
+    STRINGdb:::normalize_evidence_channels(c("experimental", "Database", "cooccurence"))
+  )
+
   # The channel numbers of STRING's API.
   all_channels <- c("neighborhood", "fusion", "cooccurrence", "coexpression", "experiments", "databases", "textmining")
   for (channel_number in 1:7) {
