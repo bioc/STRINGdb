@@ -255,6 +255,30 @@ head(annotations, n=20)
 
 
 
+\section{GSEA (VALUES/RANKS ENRICHMENT)}
+
+The enrichment above tests a selected set of proteins, for example the hits of an experiment. STRING can also test a whole ranked experiment, without any cutoff: its values/ranks enrichment, a gene set enrichment analysis (GSEA, "Proteins with Values/Ranks" on the STRING website), finds the terms whose proteins gather at the top, at the bottom or at both ends of the list ranked by your values. The analysis runs on STRING's servers, so the identifiers and values are sent to STRING. It needs an API key, which STRING gives without registration. Request it once, and store it as \texttt{STRINGDB\_API\_KEY} in your \texttt{\textasciitilde/.Renviron} file:
+
+<<gsea_api_key, eval=FALSE>>=
+string_db$get_api_key()
+@
+
+Then submit all mapped proteins with their values. The method submits a job to STRING's queue, waits for it and returns a data frame of the enriched terms:
+
+<<gsea, eval=FALSE>>=
+gsea <- string_db$get_gsea( example1_mapped$STRING_id, example1_mapped$logFC )
+head(gsea[, c("category", "termDescription", "direction",
+             "enrichmentScore", "falseDiscoveryRate")])
+attr(gsea, "page_url")
+@
+
+With the default \texttt{rank\_direction="descending"}, rank 1 is the largest value, and "top" is the end of the largest values (here, the upregulated genes). If the wait times out or is interrupted, the job keeps running on STRING. The message gives its identifier, and \texttt{get\_gsea\_results} returns its results later, with the same API key:
+
+<<gsea_results, eval=FALSE>>=
+gsea <- string_db$get_gsea_results( "the job identifier" )
+@
+
+
 \section{CLUSTERING}
 
 The iGraph package provides several clustering/community algorithms: "fastgreedy", "walktrap", "spinglass", "edge.betweenness".

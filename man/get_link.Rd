@@ -7,7 +7,7 @@ get_link
 Returns a short link to the network page of the STRING website that shows the protein interactions between the given identifiers.
 }
 \usage{
-\S4method{get_link}{STRINGdb}(string_ids=NULL, required_score=NULL, network_flavor="evidence", payload_id=NULL, network_term_id=NULL, hide_node_labels=NULL, hide_disconnected_nodes=NULL, block_structure_pics_in_bubbles=NULL, flat_node_design=TRUE, center_node_labels=NULL, custom_label_font_size=NULL, caller_identity="STRINGdb-package", typed_physical_edges=NULL, typed_regulatory_edges=NULL, show_regulatory_signs=NULL)
+\S4method{get_link}{STRINGdb}(string_ids=NULL, required_score=NULL, network_flavor="evidence", payload_id=NULL, network_term_id=NULL, hide_node_labels=NULL, hide_disconnected_nodes=NULL, block_structure_pics_in_bubbles=NULL, flat_node_design=TRUE, center_node_labels=NULL, custom_label_font_size=NULL, caller_identity="STRINGdb-package", typed_physical_edges=NULL, typed_regulatory_edges=NULL, show_regulatory_signs=NULL, add_color_nodes=NULL, add_white_nodes=NULL, show_query_node_labels=NULL, channels=NULL)
 }
 \arguments{
   \item{string_ids}{
@@ -56,6 +56,21 @@ include regulatory edges in the typed network view. Available only with \code{ne
   \item{show_regulatory_signs}{
 show positive/negative regulatory signs in the typed network view. Requires \code{typed_regulatory_edges=TRUE}. Accepts \code{TRUE}/\code{FALSE} or \code{0}/\code{1}.
 }
+  \item{add_color_nodes}{
+adds this many interaction partners of the given proteins to the network, drawn in colour. A whole number of at least 0; the default \code{NULL} adds none.
+}
+  \item{add_white_nodes}{
+adds this many further interaction partners to the network, drawn white, after the coloured ones. A whole number of at least 0; the default \code{NULL} adds none. Neither \code{add_color_nodes} nor \code{add_white_nodes} is used with \code{network_term_id}: STRING then adds no interaction partners.
+}
+  \item{show_query_node_labels}{
+labels the given proteins with the identifiers submitted in \code{string_ids} instead of their STRING names (with STRING identifiers, the labels are those identifiers, e.g. \code{9606.ENSP00000269305}). Accepts \code{TRUE}/\code{FALSE} or \code{0}/\code{1}; by default the STRING names are shown.
+}
+  \item{channels}{
+the evidence channels used for the interactions: a character vector of one or more of \code{"neighborhood"}, \code{"fusion"}, \code{"cooccurrence"}, \code{"coexpression"}, \code{"experiments"}, \code{"databases"} and \code{"textmining"} (in any case). The default \code{NULL} uses all channels. STRING recomputes the combined score of each interaction from the selected channels, and \code{required_score} applies to the recomputed score.
+}
+}
+\details{
+The \code{channels} option needs STRING version 12.0 or later. Older versions (11.5, 11.0b and 11.0) would ignore it, so it is not used there, with a warning, and the network page uses all channels.
 }
 \value{
 short link to the network page of the STRING website that shows the protein interactions between the input identifiers.

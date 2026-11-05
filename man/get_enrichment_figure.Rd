@@ -14,7 +14,7 @@ Returns a STRING enrichment figure for the given identifiers and enrichment cate
 a vector of STRING identifiers.
 }
   \item{category}{
-enrichment category to visualize. Supported categories are \code{"Process"}, \code{"Function"}, \code{"Component"}, \code{"Keyword"}, \code{"KEGG"}, \code{"RCTM"}, \code{"HPO"}, \code{"MPO"}, \code{"DPO"}, \code{"WPO"}, \code{"ZPO"}, \code{"FYPO"}, \code{"Pfam"}, \code{"SMART"}, \code{"InterPro"}, \code{"PMID"}, \code{"NetworkNeighborAL"}, \code{"COMPARTMENTS"}, \code{"TISSUES"}, \code{"DISEASES"}, and \code{"WikiPathways"}.
+enrichment category to visualize. Supported categories are \code{"Process"}, \code{"Function"}, \code{"Component"}, \code{"Keyword"}, \code{"KEGG"}, \code{"RCTM"}, \code{"HPO"}, \code{"MPO"}, \code{"DPO"}, \code{"WPO"}, \code{"ZPO"}, \code{"FYPO"}, \code{"GWAS"}, \code{"Hallmark"}, \code{"Pfam"}, \code{"SMART"}, \code{"InterPro"}, \code{"PMID"}, \code{"NetworkNeighborAL"}, \code{"COMPARTMENTS"}, \code{"TISSUES"}, \code{"DISEASES"}, and \code{"WikiPathways"}. \code{"GWAS"} and \code{"Hallmark"} need STRING version 12.5 or later.
 }
   \item{file}{
 file where to save the image output.
@@ -26,13 +26,13 @@ STRING image output format: \code{"image"}, \code{"highres_image"} or \code{"svg
 threshold for visually grouping related terms on the plot, from \code{0.1} to \code{1}.
 }
   \item{color_palette}{
-color palette used to represent FDR values. Supported values are \code{"mint_blue"}, \code{"lime_emerald"}, \code{"green_blue"}, \code{"peach_purple"}, \code{"straw_navy"}, and \code{"yellow_pink"}.
+color palette used to represent FDR values. Supported values are \code{"mint_blue"}, \code{"lime_emerald"}, \code{"green_blue"}, \code{"peach_purple"}, \code{"straw_navy"}, \code{"yellow_pink"}, and \code{"red_blue"}. \code{"red_blue"} needs STRING version 12.5 or later.
 }
   \item{number_of_term_shown}{
 maximum number of terms displayed on the plot. STRING shows at most 100.
 }
   \item{x_axis}{
-variable used on the x-axis and, without \code{sort_by}, for ranking the terms: \code{"signal"}, \code{"strength"}, \code{"FDR"}, or \code{"gene_count"}.
+variable used on the x-axis and, without \code{sort_by}, for ranking the terms: \code{"signal"}, \code{"strength"}, \code{"FDR"}, \code{"gene_count"}, or \code{"count"}, which STRING treats as \code{"gene_count"}. \code{"count"} needs STRING version 12.5 or later.
 }
   \item{caller_identity}{
 caller identifier sent to STRING.
@@ -41,7 +41,7 @@ caller identifier sent to STRING.
 the kind of plot: \code{"dotplot"} (default) or \code{"barplot"}.
 }
   \item{sort_by}{
-variable that decides which terms are shown and in which order: \code{"signal"}, \code{"strength"}, \code{"FDR"}, or \code{"gene_count"}. The default \code{NULL} uses the \code{x_axis} variable.
+variable that decides which terms are shown and in which order: \code{"signal"}, \code{"strength"}, \code{"FDR"}, \code{"gene_count"}, or \code{"count"} (as \code{"gene_count"}). The default \code{NULL} uses the \code{x_axis} variable.
 }
   \item{max_fdr}{
 optional filter: the highest FDR of a term, above \code{0} and at most \code{1}.
@@ -60,9 +60,11 @@ optional: merges the terms whose protein sets overlap at least this much (above 
 }
 }
 \details{
-STRING applies the optional filters like the filters of the enrichment table on its website; without them (the default \code{NULL}), no term is filtered. When STRING refuses the request, the method stops with STRING's explanation.
+STRING applies the optional filters like the filters of the enrichment table on its website; without them (the default \code{NULL}), no term is filtered. When STRING refuses the request, the method stops with STRING's explanation. STRING does not refuse an unknown \code{category}, \code{color_palette}, \code{x_axis} or \code{sort_by}, but silently uses its default instead, so the method stops with an error, before any request, for a value that is not listed here.
 
 \code{graph_type}, \code{sort_by} and the filters need STRING version 12.5 or later. An older version, such as \code{version="12.0"}, would ignore them, so they are not used there, with a warning.
+
+The values new in STRING 12.5, \code{category="GWAS"} or \code{"Hallmark"}, \code{color_palette="red_blue"} and \code{x_axis="count"}, also need STRING version 12.5 or later. An older version would silently draw its default figure for them instead, so with an older version the method stops with an error, before any request.
 }
 \value{
 For \code{output_format="image"} and \code{output_format="highres_image"}, returns a PNG image array. For \code{output_format="svg"}, returns the SVG markup as text.

@@ -48,27 +48,30 @@ showClass("STRINGdb")
   \describe{
     \item{\code{set_background(background_vector)}:}{ ~~ }
     \item{\code{post_payload(stringIds, colors, comments, links, iframe_urls, logo_imgF, legend_imgF)}:}{ ~~ }
-    \item{\code{plot_network(string_ids, payload_id, required_score)}:}{ ~~ }
-    \item{\code{plot_ppi_enrichment(string_ids, file, sliceWindow, edgeWindow, windowExtendedReferenceThreshold, minVal, title)}:}{ ~~ }
-    \item{\code{map(my_data_frame, my_data_frame_id_col_names, takeFirst, removeUnmappedRows, quiet)}:}{ ~~ }
+    \item{\code{plot_network(string_ids, payload_id, required_score, add_link, network_flavor, add_summary, typed_physical_edges, typed_regulatory_edges, show_regulatory_signs, add_color_nodes, add_white_nodes, show_query_node_labels, channels)}:}{ ~~ }
+    \item{\code{plot_ppi_enrichment(string_ids, file, sliceWindow, edgeWindow, windowExtendedReferenceThreshold, minVal, title, quiet)}:}{ ~~ }
+    \item{\code{map(my_data_frame, my_data_frame_id_col_names, takeFirst, removeUnmappedRows, quiet, usePreferredSources)}:}{ ~~ }
     \item{\code{load()}:}{ ~~ }
     \item{\code{get_term_proteins(term_ids, string_ids, enableIEA)}:}{ ~~ }
-    \item{\code{get_summary(string_ids)}:}{ ~~ }
+    \item{\code{get_summary(string_ids, required_score)}:}{ ~~ }
     \item{\code{get_subnetwork(string_ids)}:}{ ~~ }
     \item{\code{get_ppi_enrichment_full(string_ids, sliceWindow, edgeWindow, windowExtendedReferenceThreshold, growingWindowLimit)}:}{ ~~ }
     \item{\code{get_ppi_enrichment(string_ids)}:}{ ~~ }
     \item{\code{get_proteins()}:}{ ~~ }
     \item{\code{get_enrichment_figure(string_ids, category="Process", file, output_format="image", group_by_similarity, color_palette="mint_blue", number_of_term_shown, x_axis="signal", caller_identity="STRINGdb-package", graph_type="dotplot", sort_by, max_fdr, min_gene_count, min_strength, min_signal, merge_similarity)}:}{ ~~ }
-    \item{\code{get_png(string_ids, required_score, network_flavor, file, payload_id, output_format, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity, typed_physical_edges, typed_regulatory_edges, show_regulatory_signs, network_clustering_algorithm, network_clustering_parameter, cluster_aware_layout, network_clustering_edge_visibility, show_cluster_names, cluster_name_size)}:}{ ~~ }
+    \item{\code{get_png(string_ids, required_score, network_flavor, file, payload_id, output_format, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity, typed_physical_edges, typed_regulatory_edges, show_regulatory_signs, network_clustering_algorithm, network_clustering_parameter, cluster_aware_layout, network_clustering_edge_visibility, show_cluster_names, cluster_name_size, add_color_nodes, add_white_nodes, show_query_node_labels, channels)}:}{ ~~ }
     \item{\code{get_neighbors(string_ids, mode="all")}:}{ ~~ }
     \item{\code{get_interaction_partners(string_ids, required_score, limit)}:}{ ~~ }
-    \item{\code{get_link(string_ids, required_score, network_flavor, payload_id, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity, typed_physical_edges, typed_regulatory_edges, show_regulatory_signs)}:}{ ~~ }
+    \item{\code{get_link(string_ids, required_score, network_flavor, payload_id, network_term_id, hide_node_labels, hide_disconnected_nodes, block_structure_pics_in_bubbles, flat_node_design=TRUE, center_node_labels, custom_label_font_size, caller_identity, typed_physical_edges, typed_regulatory_edges, show_regulatory_signs, add_color_nodes, add_white_nodes, show_query_node_labels, channels)}:}{ ~~ }
     \item{\code{get_interactions(string_ids)}:}{ ~~ }
-    \item{\code{get_homologs_besthits(string_ids, symbets, target_species_id, bitscore_threshold)}:}{ ~~ }
+    \item{\code{get_homologs_besthits(string_ids, target_species_id)}:}{ ~~ }
     \item{\code{get_homologs(string_ids, target_species_id, bitscore_threshold)}:}{ ~~ }
     \item{\code{get_graph()}:}{ ~~ }
-    \item{\code{get_enrichment(string_ids, category, methodMT, iea, minScore, max_fdr, min_gene_count, min_strength, min_signal, merge_similarity)}:}{ ~~ }
+    \item{\code{get_enrichment(string_ids, category, methodMT, iea, minScore, max_fdr, min_gene_count, min_strength, min_signal, merge_similarity, add_scores=FALSE, caller_identity="STRINGdb-package")}:}{ ~~ }
     \item{\code{get_geneset_description(string_ids, caller_identity="STRINGdb-package")}:}{ ~~ }
+    \item{\code{get_gsea(string_ids, values, max_fdr=0.01, rank_direction="descending", timeout=7200, api_key=Sys.getenv("STRINGDB_API_KEY"), quiet=FALSE, caller_identity="STRINGdb-package")}:}{ STRING's values/ranks enrichment (GSEA) of a whole ranked experiment, run on STRING's job queue. }
+    \item{\code{get_gsea_results(job_id, timeout=7200, api_key=Sys.getenv("STRINGDB_API_KEY"), quiet=FALSE, caller_identity="STRINGdb-package")}:}{ the results of a values/ranks job submitted with get_gsea. }
+    \item{\code{get_api_key(caller_identity="STRINGdb-package")}:}{ requests an API key from STRING for get_gsea. }
     \item{\code{get_clusters(string_ids, algorithm)}:}{ ~~ }
     \item{\code{get_annotations_desc()}:}{ ~~ }
     \item{\code{get_annotations()}:}{ ~~ }

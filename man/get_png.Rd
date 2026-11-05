@@ -7,7 +7,7 @@ get_png
 Returns a STRING network image for the given identifiers or for a STRING functional term.
 }
 \usage{
-\S4method{get_png}{STRINGdb}(string_ids=NULL, required_score=NULL, network_flavor="evidence", file=NULL, payload_id=NULL, output_format="image", network_term_id=NULL, hide_node_labels=NULL, hide_disconnected_nodes=NULL, block_structure_pics_in_bubbles=NULL, flat_node_design=TRUE, center_node_labels=NULL, custom_label_font_size=NULL, caller_identity="STRINGdb-package", typed_physical_edges=NULL, typed_regulatory_edges=NULL, show_regulatory_signs=NULL, network_clustering_algorithm=NULL, network_clustering_parameter=NULL, cluster_aware_layout=NULL, network_clustering_edge_visibility=NULL, show_cluster_names=NULL, cluster_name_size=NULL)
+\S4method{get_png}{STRINGdb}(string_ids=NULL, required_score=NULL, network_flavor="evidence", file=NULL, payload_id=NULL, output_format="image", network_term_id=NULL, hide_node_labels=NULL, hide_disconnected_nodes=NULL, block_structure_pics_in_bubbles=NULL, flat_node_design=TRUE, center_node_labels=NULL, custom_label_font_size=NULL, caller_identity="STRINGdb-package", typed_physical_edges=NULL, typed_regulatory_edges=NULL, show_regulatory_signs=NULL, network_clustering_algorithm=NULL, network_clustering_parameter=NULL, cluster_aware_layout=NULL, network_clustering_edge_visibility=NULL, show_cluster_names=NULL, cluster_name_size=NULL, add_color_nodes=NULL, add_white_nodes=NULL, show_query_node_labels=NULL, channels=NULL)
 }
 \arguments{
   \item{string_ids}{
@@ -80,6 +80,18 @@ writes the names of the clusters on the picture. Accepts \code{TRUE}/\code{FALSE
   \item{cluster_name_size}{
 the size of the cluster names: \code{1}, \code{1.5}, \code{2}, \code{2.5}, \code{3}, \code{3.5}, \code{4}, \code{5} or \code{6}. By default STRING chooses the size that suits the picture.
 }
+  \item{add_color_nodes}{
+adds this many interaction partners of the given proteins to the network, drawn in colour. A whole number of at least 0; the default \code{NULL} adds none.
+}
+  \item{add_white_nodes}{
+adds this many further interaction partners to the network, drawn white, after the coloured ones. A whole number of at least 0. The default \code{NULL} leaves it to STRING, which adds none, or 10 white partners when a single protein is given. Giving \code{add_color_nodes} turns off those 10 white partners unless \code{add_white_nodes} is given too; \code{add_white_nodes} sets their number. Neither \code{add_color_nodes} nor \code{add_white_nodes} is used with \code{network_term_id}: STRING then adds no interaction partners.
+}
+  \item{show_query_node_labels}{
+labels the given proteins with the identifiers submitted in \code{string_ids} instead of their STRING names (with STRING identifiers, the labels are those identifiers, e.g. \code{9606.ENSP00000269305}). Accepts \code{TRUE}/\code{FALSE} or \code{0}/\code{1}; by default the STRING names are shown.
+}
+  \item{channels}{
+the evidence channels used for the interactions: a character vector of one or more of \code{"neighborhood"}, \code{"fusion"}, \code{"cooccurrence"}, \code{"coexpression"}, \code{"experiments"}, \code{"databases"} and \code{"textmining"} (in any case). The default \code{NULL} uses all channels. STRING recomputes the combined score of each interaction from the selected channels, and \code{required_score} applies to the recomputed score.
+}
 }
 \details{
 A network of more than 1,000 proteins is drawn simplified, as on the STRING website: with confidence edges (whatever \code{network_flavor} says) and without structure pictures in the nodes.
@@ -87,6 +99,8 @@ A network of more than 1,000 proteins is drawn simplified, as on the STRING webs
 STRING draws a PNG (\code{output_format="image"} or \code{"highres_image"}) of at most 150,000 interactions. For a larger network, and for any other request that STRING refuses, the method stops with STRING's explanation; for the PNG, ask for the SVG (\code{output_format="svg"}) or use a higher \code{required_score}.
 
 The clustering options need STRING version 12.5 or later. An older version, such as \code{version="12.0"}, would ignore them, so they are not used there, with a warning.
+
+The \code{channels} option needs STRING version 12.0 or later. Older versions (11.5, 11.0b and 11.0) would ignore it, so it is not used there, with a warning, and the picture uses all channels.
 }
 \value{
 For \code{output_format="image"} and \code{output_format="highres_image"}, returns a PNG image array. For \code{output_format="svg"}, returns the SVG markup as text.

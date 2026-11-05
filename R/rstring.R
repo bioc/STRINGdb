@@ -387,9 +387,11 @@ Author(s):
       string_ids <- unique(string_ids)
       string_ids <- string_ids[!is.na(string_ids)]
 
-      if (algorithm == "fastgreedy") fgreedy <- fastgreedy.community(simplify(get_subnetwork(string_ids)), merges = TRUE, modularity = TRUE)
-      if (algorithm == "walktrap") fgreedy <- walktrap.community(get_subnetwork(string_ids), merges = TRUE, modularity = TRUE)
-      if (algorithm == "edge.betweenness") fgreedy <- edge.betweenness.community(get_subnetwork(string_ids), merges = TRUE, modularity = TRUE)
+      # igraph's current names of the algorithms, with the same arguments as before (fastgreedy.community,
+      # walktrap.community and edge.betweenness.community are deprecated since igraph 2.0.0)
+      if (algorithm == "fastgreedy") fgreedy <- cluster_fast_greedy(simplify(get_subnetwork(string_ids)), merges = TRUE, modularity = TRUE)
+      if (algorithm == "walktrap") fgreedy <- cluster_walktrap(get_subnetwork(string_ids), merges = TRUE, modularity = TRUE)
+      if (algorithm == "edge.betweenness") fgreedy <- cluster_edge_betweenness(get_subnetwork(string_ids), merges = TRUE, modularity = TRUE)
 
       memb <- membership(fgreedy)
       clusters <- NULL
@@ -406,7 +408,7 @@ Author(s):
 
     get_enrichment = function(string_ids, category = "All", methodMT = NULL, iea = NULL, minScore = NULL,
                               max_fdr = NULL, min_gene_count = NULL, min_strength = NULL, min_signal = NULL,
-                              merge_similarity = NULL) {
+                              merge_similarity = NULL, add_scores = FALSE, caller_identity = "STRINGdb-package") {
       '
 Description:
   Returns the enrichment for various annotation categories (among others Gene Ontology, KEGG, domains, Reference Publications) for a vector of STRING proteins.
@@ -422,6 +424,10 @@ Input parameters:
   "min_signal"        lowest signal of a term, STRING\'s balance of strength and FDR
   "merge_similarity"  merges terms whose protein sets overlap at least this much (above 0, at most 1)
                       into the most significant of them
+  "add_scores"        TRUE adds STRING\'s strength and signal columns to the table, before p_value
+                      (default FALSE: the table without them). It needs STRING version 12.5 or later;
+                      with an older version it is not used, with a warning.
+  "caller_identity"   caller identifier sent to STRING
 
 Author(s):
    Andrea Franceschini
@@ -441,6 +447,10 @@ Author(s):
 
       filter_params <- normalize_enrichment_filters(max_fdr, min_gene_count, min_strength, min_signal, merge_similarity)
       filter_params <- options_supported_by_version(filter_params, version, "The enrichment filters")
+
+      # add_scores=1 asks STRING for the strength and signal columns; FALSE is not sent (enrichment_score_params)
+
+      score_params <- enrichment_score_params(add_scores, version)
 
 
       urlStr <- paste(stable_url, "/api/tsv/enrichment?", sep = "")
@@ -466,7 +476,8 @@ Author(s):
         params <- list(species = species, identifiers = identifiers, background_string_identifiers = background)
       }
 
-      params <- c(params, filter_params)
+      params <- c(params, filter_params, score_params)
+      params$caller_identity <- caller_identity
 
       tempDfv <- postFormSmart(urlStr, .params = params)
 
@@ -533,6 +544,135 @@ Author(s):
     },
 
     #########################################
+    ## get_api_key
+    #########################################
+
+    get_api_key = function(caller_identity = "STRINGdb-package") {
+      '
+Description:
+  Requests an API key from STRING for its values/ranks enrichment (get_gsea). STRING gives the key
+  without registration. Please request a key only once and keep it: store it as STRINGDB_API_KEY in
+  your ~/.Renviron file, where get_gsea finds it.
+
+Input parameters:
+  "caller_identity"   caller identifier sent to STRING.
+
+Author(s):
+   Damian Szklarczyk
+'
+
+      key <- request_string_api_key(stable_url, caller_identity)
+
+      note <- ""
+      if (nchar(key$note) > 0) {
+        note <- paste(key$note, "\n", sep = "")
+      }
+      message(
+        "Your STRING API key: ", key$api_key, "\n", note,
+        "Keep it, so that get_gsea() finds it: add the line\n",
+        "  STRINGDB_API_KEY=", key$api_key, "\n",
+        "to your ~/.Renviron file (e.g. with usethis::edit_r_environ()) and restart R.\n",
+        "Please request a key only once."
+      )
+      return(invisible(key$api_key))
+    },
+
+    #########################################
+    ## get_gsea
+    #########################################
+
+    get_gsea = function(string_ids, values, max_fdr = 0.01, rank_direction = "descending", timeout = 7200,
+                        api_key = Sys.getenv("STRINGDB_API_KEY"), quiet = FALSE, caller_identity = "STRINGdb-package") {
+      '
+Description:
+  Runs STRING\'s values/ranks enrichment (a GSEA, "Proteins with Values/Ranks" on the STRING website)
+  on a whole ranked experiment, e.g. all measured proteins with their log fold changes, without any
+  cutoff. The analysis runs on STRING\'s servers: the method submits a job, waits for it and downloads
+  the results. The identifiers and values are sent to STRING.
+  Returns a data frame with STRING\'s columns (category, termID, termDescription, genesMapped,
+  genesInSet, enrichmentScore, direction, falseDiscoveryRate, method, proteinIDs, proteinLabels,
+  proteinInputLabels, proteinInputValues, proteinRanks) and the attributes job_id, page_url,
+  graph_url, download_url and string_version. If the wait ends (timeout or interrupt), the job keeps
+  running on STRING: get its results later with get_gsea_results(job_id).
+
+Input parameters:
+  "string_ids"      vector of STRING identifiers (e.g. the STRING_id column of map()), one per value.
+                      Rows without an identifier or without a finite value are left out, and an
+                      identifier given more than once keeps its value farthest from 0.
+  "values"          numeric vector of the values to rank, e.g. log fold changes or t statistics.
+  "max_fdr"         FDR cutoff of the reported terms (above 0, at most 0.25; default 0.01).
+  "rank_direction"  "descending" (default: rank 1 is the largest value, and "top" the end of the
+                      largest values) or "ascending" (rank 1 is the smallest value). It only names the
+                      ends of the ranked list and numbers the ranks; the enrichment is the same.
+  "timeout"         seconds to wait for the job (default 7200).
+  "api_key"         STRING API key (default: the environment variable STRINGDB_API_KEY); see get_api_key.
+  "quiet"           TRUE to print no progress messages.
+  "caller_identity" caller identifier sent to STRING.
+
+Author(s):
+   Damian Szklarczyk
+'
+
+      options <- normalize_values_ranks_options(max_fdr, rank_direction)
+      if (!(is.numeric(timeout) && length(timeout) == 1 && !is.na(timeout) && timeout > 0)) {
+        stop("ERROR: timeout should be a positive number of seconds.", call. = FALSE)
+      }
+      api_key <- resolve_values_ranks_api_key(api_key)
+
+      input <- prepare_values_ranks_input(string_ids, values)
+      if (!quiet) {
+        if (input$n_missing > 0) {
+          message("Left out ", input$n_missing, " rows without an identifier or without a finite value.")
+        }
+        if (input$n_duplicates > 0) {
+          message("Left out ", input$n_duplicates, " repeated identifiers (each keeps its value farthest from 0).")
+        }
+      }
+
+      job_id <- submit_values_ranks_job(stable_url, species, input$text, api_key, options, caller_identity)
+      if (!quiet) {
+        message("Submitted ", input$n_submitted, " proteins to STRING's values/ranks enrichment (job ", job_id, ").")
+      }
+
+      return(collect_values_ranks_results(stable_url, api_key, job_id, timeout, quiet, caller_identity))
+    },
+
+    #########################################
+    ## get_gsea_results
+    #########################################
+
+    get_gsea_results = function(job_id, timeout = 7200, api_key = Sys.getenv("STRINGDB_API_KEY"), quiet = FALSE,
+                                caller_identity = "STRINGdb-package") {
+      '
+Description:
+  Returns the results of a values/ranks job submitted with get_gsea (see there), waiting for the job if
+  it is not finished yet, e.g. after the wait of get_gsea timed out or was interrupted, or in a new R
+  session. STRING keeps the results for a limited time.
+
+Input parameters:
+  "job_id"          the job identifier (the job_id attribute of the results of get_gsea, or its messages).
+  "timeout"         seconds to wait for the job (default 7200).
+  "api_key"         the STRING API key that submitted the job (default: the environment variable
+                      STRINGDB_API_KEY). STRING keeps each job for the key that submitted it.
+  "quiet"           TRUE to print no progress messages.
+  "caller_identity" caller identifier sent to STRING.
+
+Author(s):
+   Damian Szklarczyk
+'
+
+      if (!(is.character(job_id) && length(job_id) == 1 && !is.na(job_id) && nchar(trimws(job_id)) > 0)) {
+        stop("ERROR: job_id should be one job identifier.", call. = FALSE)
+      }
+      if (!(is.numeric(timeout) && length(timeout) == 1 && !is.na(timeout) && timeout > 0)) {
+        stop("ERROR: timeout should be a positive number of seconds.", call. = FALSE)
+      }
+      api_key <- resolve_values_ranks_api_key(api_key)
+
+      return(collect_values_ranks_results(stable_url, api_key, trimws(job_id), timeout, quiet, caller_identity))
+    },
+
+    #########################################
     ## get_enrichment_figure
     #########################################
 
@@ -559,21 +699,28 @@ Description:
 
 Input parameters:
   "string_ids"             a vector of STRING identifiers.
-  "category"               enrichment category to visualize (default "Process")
+  "category"               enrichment category to visualize (default "Process"): Process, Function, Component,
+                           Keyword, KEGG, RCTM, HPO, MPO, DPO, WPO, ZPO, FYPO, GWAS, Hallmark, Pfam, SMART, InterPro,
+                           PMID, NetworkNeighborAL, COMPARTMENTS, TISSUES, DISEASES or WikiPathways
+                           (GWAS and Hallmark need STRING version 12.5 or later)
   "file"                   file where to save the image output
   "output_format"          image format returned by STRING ("image", "highres_image" or "svg")
   "group_by_similarity"    threshold for grouping related terms on the plot (from 0.1 to 1)
-  "color_palette"          color palette used to represent FDR values
+  "color_palette"          color palette used to represent FDR values ("mint_blue", "lime_emerald", "green_blue",
+                           "peach_purple", "straw_navy", "yellow_pink" or "red_blue"; red_blue needs STRING version
+                           12.5 or later)
   "number_of_term_shown"   maximum number of terms shown on the plot (STRING shows at most 100)
-  "x_axis"                 variable used on the x-axis ("signal", "strength", "FDR" or "gene_count")
+  "x_axis"                 variable used on the x-axis ("signal", "strength", "FDR", "gene_count" or "count",
+                           which STRING treats as "gene_count"; count needs STRING version 12.5 or later)
   "caller_identity"        caller identifier sent to STRING
   "graph_type"             "dotplot" (default) or "barplot"
   "sort_by"                variable that decides which terms are shown and in which order
-                           ("signal", "strength", "FDR" or "gene_count"; default NULL: the x_axis variable)
+                           ("signal", "strength", "FDR", "gene_count" or "count"; default NULL: the x_axis variable)
   "max_fdr", "min_gene_count", "min_strength", "min_signal", "merge_similarity"
                            optional filters of the terms, as in get_enrichment (default NULL: no filter)
   graph_type, sort_by and the filters need STRING version 12.5 or later; with an older version they are not used,
-  with a warning.
+  with a warning. The category GWAS or Hallmark, the color_palette red_blue and the x_axis count need it too; with an
+  older version they stop with an error, as that version would silently draw its default figure instead.
 
 Author(s):
    Damian Szklarczyk
@@ -590,9 +737,15 @@ Author(s):
         stop()
       }
 
+      # STRING does not refuse an unknown category, palette or axis variable: it silently draws its default instead,
+      # so these checks are the only guard against a misspelt value. The values are those that STRING 12.5 accepts.
+      # GWAS, Hallmark, red_blue and count are new in STRING 12.5: an older version, such as version-12-0, draws its
+      # default figure for them as for a misspelt value, so with an older version they stop with an error
+      # (stop_on_value_needing_version).
+
       valid_categories <- c(
         "Process", "Function", "Component", "Keyword", "KEGG", "RCTM",
-        "HPO", "MPO", "DPO", "WPO", "ZPO", "FYPO", "Pfam", "SMART",
+        "HPO", "MPO", "DPO", "WPO", "ZPO", "FYPO", "GWAS", "Hallmark", "Pfam", "SMART",
         "InterPro", "PMID", "NetworkNeighborAL", "COMPARTMENTS",
         "TISSUES", "DISEASES", "WikiPathways"
       )
@@ -600,18 +753,26 @@ Author(s):
         cat("ERROR: category should be one of: ", paste(valid_categories, collapse = ", "), ".\n", sep = "")
         stop()
       }
+      stop_on_value_needing_version(category, c("GWAS", "Hallmark"), "category", version)
 
-      valid_color_palettes <- c("mint_blue", "lime_emerald", "green_blue", "peach_purple", "straw_navy", "yellow_pink")
+      valid_color_palettes <- c(
+        "mint_blue", "lime_emerald", "green_blue", "peach_purple",
+        "straw_navy", "yellow_pink", "red_blue"
+      )
       if (!(color_palette %in% valid_color_palettes)) {
         cat("ERROR: color_palette should be one of: ", paste(valid_color_palettes, collapse = ", "), ".\n", sep = "")
         stop()
       }
+      stop_on_value_needing_version(color_palette, "red_blue", "color_palette", version)
 
-      valid_x_axes <- c("signal", "strength", "FDR", "gene_count")
+      # "count" is STRING's other name for "gene_count"; it is sent as given
+
+      valid_x_axes <- c("signal", "strength", "FDR", "gene_count", "count")
       if (!(x_axis %in% valid_x_axes)) {
         cat("ERROR: x_axis should be one of: ", paste(valid_x_axes, collapse = ", "), ".\n", sep = "")
         stop()
       }
+      stop_on_value_needing_version(x_axis, "count", "x_axis", version)
 
       valid_graph_types <- c("dotplot", "barplot")
       if (!(length(graph_type) == 1 && graph_type %in% valid_graph_types)) {
@@ -711,7 +872,9 @@ Author(s):
     #########################################
 
     plot_network = function(string_ids, payload_id = NULL, required_score = NULL, add_link = FALSE, network_flavor = "evidence", add_summary = TRUE,
-                            typed_physical_edges = NULL, typed_regulatory_edges = NULL, show_regulatory_signs = NULL) {
+                            typed_physical_edges = NULL, typed_regulatory_edges = NULL, show_regulatory_signs = NULL,
+                            add_color_nodes = NULL, add_white_nodes = NULL,
+                            show_query_node_labels = NULL, channels = NULL) {
       '
 Description:
   Plots an image of the STRING network with the given proteins.
@@ -732,6 +895,25 @@ Input parameters:
   "typed_physical_edges"  include physical edges in the typed network view (TRUE/FALSE or 0/1).
   "typed_regulatory_edges"  include regulatory edges in the typed network view (TRUE/FALSE or 0/1).
   "show_regulatory_signs"  show positive/negative regulatory signs in the typed network view (TRUE/FALSE or 0/1).
+  "add_color_nodes"   adds this many interaction partners of the given proteins to the network, drawn in colour
+                      (a whole number of at least 0; default NULL: none)
+  "add_white_nodes"   adds this many further interaction partners, drawn white, after the coloured ones
+                      (a whole number of at least 0; default NULL: STRING\'s default, which adds none, or
+                      10 white partners when a single protein is given). Giving add_color_nodes turns off
+                      those 10 white partners unless add_white_nodes is given too.
+  "show_query_node_labels"  labels the given proteins with the identifiers submitted in string_ids
+                      instead of their STRING names (TRUE/FALSE or 0/1, default FALSE); with STRING
+                      identifiers, the labels are those identifiers, e.g. 9606.ENSP00000269305
+  "channels"          the evidence channels used for the interactions: one or more of "neighborhood", "fusion",
+                      "cooccurrence", "coexpression", "experiments", "databases" and "textmining"
+                      (default NULL: all channels; needs STRING version 12.0 or later). STRING recomputes
+                      the combined score of each interaction from the selected channels, and required_score
+                      applies to the recomputed score.
+  These four options are passed on to get_png, and to get_link for add_link. With add_color_nodes NULL the
+  link adds no interaction partners, while the picture of a single protein shows STRING\'s 10 white partners;
+  give add_color_nodes (and add_white_nodes) to get the same network in the picture and on the linked page.
+  The summary text (add_summary) is computed with all channels, for the given proteins only (without the
+  added interaction partners).
 
 Author(s):
    Andrea Franceschini
@@ -745,13 +927,17 @@ Author(s):
       if (is.null(required_score)) required_score <- score_threshold
       img <- get_png(string_ids, payload_id = payload_id, required_score = required_score, network_flavor = network_flavor,
         typed_physical_edges = typed_physical_edges, typed_regulatory_edges = typed_regulatory_edges,
-        show_regulatory_signs = show_regulatory_signs)
+        show_regulatory_signs = show_regulatory_signs, add_color_nodes = add_color_nodes,
+        add_white_nodes = add_white_nodes, show_query_node_labels = show_query_node_labels, channels = channels)
       if (!is.null(img)) {
         plot(1:(dim(img)[2]), type = "n", xaxt = "n", yaxt = "n", xlab = "", ylab = "", ylim = c(1, dim(img)[1]), xlim = c(1, (dim(img)[2])), asp = 1)
+        # the summary comes from ppi_enrichment, which has no channel selection: it uses all channels
         if (add_summary) mtext(get_summary(string_ids, required_score), cex = 0.7)
         if (add_link) mtext(get_link(string_ids, payload_id = payload_id, required_score = required_score,
           network_flavor = network_flavor, typed_physical_edges = typed_physical_edges,
-          typed_regulatory_edges = typed_regulatory_edges, show_regulatory_signs = show_regulatory_signs), cex = 0.7, side = 1)
+          typed_regulatory_edges = typed_regulatory_edges, show_regulatory_signs = show_regulatory_signs,
+          add_color_nodes = add_color_nodes, add_white_nodes = add_white_nodes,
+          show_query_node_labels = show_query_node_labels, channels = channels), cex = 0.7, side = 1)
         rasterImage(img, 1, 1, (dim(img)[2]), dim(img)[1])
       }
     },
@@ -821,14 +1007,17 @@ Author(s):
 
       network_type_param <- network_type_to_api(network_type)
 
+      # caller_identity tells STRING that the request comes from this package
       if (length(backgroundV) == 0) {
-        params <- list(species = species, identifiers = identifiers, required_score = required_score, network_type = network_type_param)
+        params <- list(species = species, identifiers = identifiers, required_score = required_score, network_type = network_type_param,
+                       caller_identity = "STRINGdb-package")
       } else {
         background <- ""
         for (id in backgroundV) {
           background <- paste(background, id, "%0d", sep = "")
         }
-        params <- list(species = species, identifiers = identifiers, background_string_identifiers = background, required_score = required_score, network_type = network_type_param)
+        params <- list(species = species, identifiers = identifiers, background_string_identifiers = background, required_score = required_score, network_type = network_type_param,
+                       caller_identity = "STRINGdb-package")
       }
 
 
@@ -870,7 +1059,11 @@ Author(s):
                        cluster_aware_layout = NULL,
                        network_clustering_edge_visibility = NULL,
                        show_cluster_names = NULL,
-                       cluster_name_size = NULL) {
+                       cluster_name_size = NULL,
+                       add_color_nodes = NULL,
+                       add_white_nodes = NULL,
+                       show_query_node_labels = NULL,
+                       channels = NULL) {
       '
 Description:
   Returns a STRING protein network image with the given identifiers.
@@ -907,7 +1100,22 @@ Input parameters:
   "network_clustering_edge_visibility"  edges between clusters: "faded" (default), "dotted", "solid" or "noshow"
   "show_cluster_names"  writes the names of the clusters on the picture (TRUE/FALSE or 0/1, default FALSE)
   "cluster_name_size"  size of the cluster names: 1, 1.5, 2, 2.5, 3, 3.5, 4, 5 or 6 (default: the size that suits the picture)
+  "add_color_nodes"   adds this many interaction partners of the given proteins to the network, drawn in colour
+                      (a whole number of at least 0; default NULL: none)
+  "add_white_nodes"   adds this many further interaction partners, drawn white, after the coloured ones
+                      (a whole number of at least 0; default NULL: STRING\'s default, which adds none, or
+                      10 white partners when a single protein is given). Giving add_color_nodes turns off
+                      those 10 white partners unless add_white_nodes is given too. Neither option is
+                      used with network_term_id: STRING then adds no interaction partners.
+  "show_query_node_labels"  labels the given proteins with the identifiers submitted in string_ids
+                      instead of their STRING names (TRUE/FALSE or 0/1, default FALSE); with STRING
+                      identifiers, the labels are those identifiers, e.g. 9606.ENSP00000269305
+  "channels"          the evidence channels used for the interactions: one or more of "neighborhood", "fusion",
+                      "cooccurrence", "coexpression", "experiments", "databases" and "textmining"
+                      (default NULL: all channels). STRING recomputes the combined score of each interaction from
+                      the selected channels, and required_score applies to the recomputed score.
   The clustering options need STRING version 12.5 or later; with an older version they are not used, with a warning.
+  The channels need STRING version 12.0 or later; with an older version they are not used, with a warning.
 Author(s):
    Andrea Franceschini
 '
@@ -941,6 +1149,9 @@ Author(s):
       block_structure_pics_in_bubbles <- normalize_api_flag(block_structure_pics_in_bubbles, "block_structure_pics_in_bubbles")
       flat_node_design <- normalize_api_flag(flat_node_design, "flat_node_design")
       center_node_labels <- normalize_api_flag(center_node_labels, "center_node_labels")
+      show_query_node_labels <- normalize_api_flag(show_query_node_labels, "show_query_node_labels")
+      add_color_nodes <- normalize_api_count(add_color_nodes, "add_color_nodes")
+      add_white_nodes <- normalize_api_count(add_white_nodes, "add_white_nodes")
 
       if (!is.null(custom_label_font_size)) {
         if (!(is.numeric(custom_label_font_size) && length(custom_label_font_size) == 1 && !is.na(custom_label_font_size) &&
@@ -957,6 +1168,14 @@ Author(s):
       )
       clustering_params <- options_supported_by_version(clustering_params, version, "The clustering options")
 
+      # the evidence channels are sent as channel1 to channel7, all seven ("on" or "off"): STRING turns off the
+      # channels that are not sent. Without channels nothing is sent, and STRING uses all channels.
+      channel_params <- normalize_evidence_channels(channels)
+      channel_params <- options_supported_by_version(
+        channel_params, version, "The evidence channels",
+        minimum_version = "12.0"
+      )
+
       identifiers <- collapse_string_identifiers(string_ids)
       urlStr <- paste(stable_url, "/api/", output_format, "/network", sep = "")
       params <- list(
@@ -972,6 +1191,9 @@ Author(s):
         flat_node_design = flat_node_design,
         center_node_labels = center_node_labels,
         custom_label_font_size = custom_label_font_size,
+        show_query_node_labels = show_query_node_labels,
+        add_color_nodes = add_color_nodes,
+        add_white_nodes = add_white_nodes,
         typed_physical_edges = typed_controls$typed_physical_edges,
         typed_regulatory_edges = typed_controls$typed_regulatory_edges,
         show_regulatory_signs = typed_controls$show_regulatory_signs,
@@ -979,7 +1201,7 @@ Author(s):
       )
 
       if (!is.null(payload_id)) params["internal_payload_id"] <- payload_id
-      params <- c(params, clustering_params)
+      params <- c(params, clustering_params, channel_params)
       params <- drop_null_params(params)
 
       # a refused request (e.g. a PNG of more than 150,000 interactions) stops with STRING's explanation,
@@ -1092,7 +1314,7 @@ Author(s):
         PPIselected <- PPIselected[PPIselected$V2 %in% backgroundV, ]
       }
 
-      myg <- graph.data.frame(PPIselected, FALSE)
+      myg <- graph_from_data_frame(PPIselected, FALSE)
       homology_graph <<- myg
       return(myg)
     },
@@ -1131,7 +1353,8 @@ Author(s):
         identifiers <- paste(identifiers, id, "%0D", sep = "")
       }
 
-      params <- list(identifiers = identifiers, species = species)
+      # caller_identity tells STRING that the request comes from this package
+      params <- list(identifiers = identifiers, species = species, caller_identity = "STRINGdb-package")
 
       tempDfv <- postFormSmart(urlStr, .params = params)
       hhits <- read.table(text = tempDfv, sep = "\t", header = FALSE, stringsAsFactors = FALSE, fill = TRUE)
@@ -1175,10 +1398,11 @@ Author(s):
         identifiers <- paste(identifiers, id, "%0D", sep = "")
       }
 
+      # caller_identity tells STRING that the request comes from this package
       if (is.null(target_species_id)) {
-        params <- list(identifiers = identifiers, species = species)
+        params <- list(identifiers = identifiers, species = species, caller_identity = "STRINGdb-package")
       } else {
-        params <- list(species_b = target_species_id, identifiers = identifiers, species = species)
+        params <- list(species_b = target_species_id, identifiers = identifiers, species = species, caller_identity = "STRINGdb-package")
       }
 
       tempDfv <- postFormSmart(urlStr, .params = params)
@@ -1388,7 +1612,7 @@ Author(s):
 '
 
       if (is.null(graph)) load()
-      return(induced.subgraph(graph, which(V(graph)$name %in% string_ids)))
+      return(induced_subgraph(graph, which(V(graph)$name %in% string_ids)))
     },
 
 
@@ -1489,7 +1713,7 @@ Author(s):
         PPIselected <- PPIselected[PPIselected$protein2 %in% backgroundV, ]
       }
 
-      myg <- graph.data.frame(PPIselected, directed = is_regulatory_network(network_type))
+      myg <- graph_from_data_frame(PPIselected, directed = is_regulatory_network(network_type))
       graph <<- myg
       return(myg)
     },
@@ -1586,10 +1810,10 @@ Author(s):
         stop()
       }
       interactions_dataframe <- data.frame(interactions_dataframe, score_temp_sort_abc = seq(1:nrow(interactions_dataframe)))
-      interactionsGraph <- graph.data.frame(interactions_dataframe, FALSE)
+      interactionsGraph <- graph_from_data_frame(interactions_dataframe, FALSE)
       hg <- get_homology_graph(bitscore_threshold)
-      nonHomologousIntGraph <- graph.difference(interactionsGraph, hg)
-      nonHomologousIntDf <- get.data.frame(nonHomologousIntGraph)
+      nonHomologousIntGraph <- igraph::difference(interactionsGraph, hg)
+      nonHomologousIntDf <- igraph::as_data_frame(nonHomologousIntGraph)
       names(nonHomologousIntDf) <- names(interactions_dataframe)
       nonHomologousIntDf <- arrange(nonHomologousIntDf, score_temp_sort_abc)
       nonHomologousIntDf <- delColDf(nonHomologousIntDf, "score_temp_sort_abc")
@@ -1858,7 +2082,11 @@ Author(s):
                         caller_identity = "STRINGdb-package",
                         typed_physical_edges = NULL,
                         typed_regulatory_edges = NULL,
-                        show_regulatory_signs = NULL) {
+                        show_regulatory_signs = NULL,
+                        add_color_nodes = NULL,
+                        add_white_nodes = NULL,
+                        show_query_node_labels = NULL,
+                        channels = NULL) {
       '
 Description:
   Returns a short link to the network page of our STRING website that shows the protein interactions between the given identifiers.
@@ -1880,6 +2108,20 @@ Input parameters:
   "typed_physical_edges"  include physical edges in the typed network view (TRUE/FALSE or 0/1)
   "typed_regulatory_edges"  include regulatory edges in the typed network view (TRUE/FALSE or 0/1)
   "show_regulatory_signs"  show positive/negative regulatory signs in the typed network view (TRUE/FALSE or 0/1)
+  "add_color_nodes"   adds this many interaction partners of the given proteins to the network, drawn in colour
+                      (a whole number of at least 0; default NULL: none)
+  "add_white_nodes"   adds this many further interaction partners, drawn white, after the coloured ones
+                      (a whole number of at least 0; default NULL: none). Neither option is used with
+                      network_term_id: STRING then adds no interaction partners.
+  "show_query_node_labels"  labels the given proteins with the identifiers submitted in string_ids
+                      instead of their STRING names (TRUE/FALSE or 0/1, default FALSE); with STRING
+                      identifiers, the labels are those identifiers, e.g. 9606.ENSP00000269305
+  "channels"          the evidence channels used for the interactions: one or more of "neighborhood", "fusion",
+                      "cooccurrence", "coexpression", "experiments", "databases" and "textmining"
+                      (default NULL: all channels). STRING recomputes the combined score of each interaction from
+                      the selected channels, and required_score applies to the recomputed score.
+                      The channels need STRING version 12.0 or later; with an older version they are not used,
+                      with a warning.
 Author(s):
    Andrea Franceschini
 '
@@ -1917,6 +2159,9 @@ Author(s):
       block_structure_pics_in_bubbles <- normalize_api_flag(block_structure_pics_in_bubbles, "block_structure_pics_in_bubbles")
       flat_node_design <- normalize_api_flag(flat_node_design, "flat_node_design")
       center_node_labels <- normalize_api_flag(center_node_labels, "center_node_labels")
+      show_query_node_labels <- normalize_api_flag(show_query_node_labels, "show_query_node_labels")
+      add_color_nodes <- normalize_api_count(add_color_nodes, "add_color_nodes")
+      add_white_nodes <- normalize_api_count(add_white_nodes, "add_white_nodes")
 
       if (!is.null(custom_label_font_size)) {
         if (!(is.numeric(custom_label_font_size) && length(custom_label_font_size) == 1 && !is.na(custom_label_font_size) &&
@@ -1927,9 +2172,22 @@ Author(s):
         custom_label_font_size <- as.integer(custom_label_font_size)
       }
 
+      # the evidence channels are sent as channel1 to channel7, all seven ("on" or "off"): STRING turns off the
+      # channels that are not sent. Without channels nothing is sent, and STRING uses all channels.
+      channel_params <- normalize_evidence_channels(channels)
+      channel_params <- options_supported_by_version(
+        channel_params, version, "The evidence channels",
+        minimum_version = "12.0"
+      )
+
+      # STRING's network page takes add_color_nodes as its limit (the number of coloured interaction partners),
+      # so the limit of 0 (no partners added) that is sent otherwise would cancel add_color_nodes
+      link_limit <- 0
+      if (!is.null(add_color_nodes)) link_limit <- add_color_nodes
+
       params <- list(
         required_score = required_score,
-        limit = 0,
+        limit = link_limit,
         network_flavor = network_flavor,
         network_type = network_type_param,
         identifiers = identifiers,
@@ -1941,12 +2199,16 @@ Author(s):
         flat_node_design = flat_node_design,
         center_node_labels = center_node_labels,
         custom_label_font_size = custom_label_font_size,
+        show_query_node_labels = show_query_node_labels,
+        add_color_nodes = add_color_nodes,
+        add_white_nodes = add_white_nodes,
         typed_physical_edges = typed_controls$typed_physical_edges,
         typed_regulatory_edges = typed_controls$typed_regulatory_edges,
         show_regulatory_signs = typed_controls$show_regulatory_signs,
         caller_identity = caller_identity
       )
       if (!is.null(payload_id)) params["internal_payload_id"] <- payload_id
+      params <- c(params, channel_params)
       params <- drop_null_params(params)
       tempDfv <- postFormSmart(urlStr, .params = params)
       df <- read.table(text = tempDfv, stringsAsFactors = FALSE, fill = TRUE)

@@ -16,7 +16,7 @@ test_regulatory_network <- function() {
     annotation = c("", "", ""),
     stringsAsFactors = FALSE
   )
-  string_db$graph <- igraph::graph.data.frame(
+  string_db$graph <- igraph::graph_from_data_frame(
     data.frame(
       from = c("9606.A", "9606.C"),
       to = c("9606.B", "9606.A"),

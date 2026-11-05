@@ -1,3 +1,8 @@
+# test_get_png_clustering calls STRING; it is deactivated when STRING cannot be reached
+# (helper_live_string.R).
+source(system.file("unitTests", "helper_live_string.R", package = "STRINGdb"), local = TRUE)
+
+
 test_normalize_network_clustering <- function() {
 
   # Without an algorithm, no clustering parameter is sent.
@@ -47,33 +52,43 @@ test_normalize_network_clustering <- function() {
 
 test_get_png_clustering <- function() {
 
-  string_db <- STRINGdb$new(version = "12.5", species = 9606, score_threshold = 400)
+  with_live_string({
 
-  # TP53, MDM2, CDKN1A, ATM, EGFR, KRAS, GRB2, SOS1, PTEN and AKT1: Leiden splits them into named clusters
-  string_ids <- c(
-    "9606.ENSP00000269305", "9606.ENSP00000258149", "9606.ENSP00000384849", "9606.ENSP00000278616",
-    "9606.ENSP00000275493", "9606.ENSP00000256078", "9606.ENSP00000376345", "9606.ENSP00000384675",
-    "9606.ENSP00000361021", "9606.ENSP00000451828"
-  )
+    string_db <- STRINGdb$new(version = "12.5", species = 9606, score_threshold = 400)
 
-  svg <- string_db$get_png(
-    string_ids, output_format = "svg", network_clustering_algorithm = "leiden",
-    show_cluster_names = TRUE, cluster_name_size = 2
-  )
-  checkTrue(grepl("nwclusterlabel", svg, fixed = TRUE))
+    # TP53, MDM2, CDKN1A, ATM, EGFR, KRAS, GRB2, SOS1, PTEN and AKT1: Leiden splits them into named clusters
+    string_ids <- c(
+      "9606.ENSP00000269305", "9606.ENSP00000258149", "9606.ENSP00000384849", "9606.ENSP00000278616",
+      "9606.ENSP00000275493", "9606.ENSP00000256078", "9606.ENSP00000376345", "9606.ENSP00000384675",
+      "9606.ENSP00000361021", "9606.ENSP00000451828"
+    )
 
-  png <- string_db$get_png(string_ids, network_clustering_algorithm = "mcl", cluster_aware_layout = TRUE)
-  checkTrue(length(dim(png)) == 3)
+    svg <- string_db$get_png(
+      string_ids, output_format = "svg", network_clustering_algorithm = "leiden",
+      show_cluster_names = TRUE, cluster_name_size = 2
+    )
+    checkTrue(grepl("nwclusterlabel", svg, fixed = TRUE))
 
-  # A picture that STRING refuses stops with STRING's explanation.
-  error_message <- tryCatch(
-    {
-      string_db$get_png(network_term_id = "GO:9999999", output_format = "svg")
-      NULL
-    },
-    error = function(e) conditionMessage(e)
-  )
-  checkTrue(!is.null(error_message))
-  checkTrue(grepl("No proteins of Homo sapiens are annotated with GO:9999999", error_message, fixed = TRUE))
+    png <- string_db$get_png(string_ids, network_clustering_algorithm = "mcl", cluster_aware_layout = TRUE)
+    checkTrue(length(dim(png)) == 3)
+
+    # A picture that STRING refuses stops with STRING's explanation. A request that did not reach STRING
+    # is not a refusal: its error goes on to with_live_string, which deactivates the test.
+    error_message <- tryCatch(
+      {
+        string_db$get_png(network_term_id = "GO:9999999", output_format = "svg")
+        NULL
+      },
+      error = function(e) {
+        if (is_string_connection_error(e)) {
+          stop(e)
+        }
+        conditionMessage(e)
+      }
+    )
+    checkTrue(!is.null(error_message))
+    checkTrue(grepl("No proteins of Homo sapiens are annotated with GO:9999999", error_message, fixed = TRUE))
+
+  })
 
 }

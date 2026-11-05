@@ -7,7 +7,7 @@ get_enrichment
 Returns the enrichment in pathways of the vector of STRING proteins that is given in input.
 }
 \usage{
-\S4method{get_enrichment}{STRINGdb}(string_ids, category = "All", methodMT = NULL, iea = NULL, minScore = NULL, max_fdr = NULL, min_gene_count = NULL, min_strength = NULL, min_signal = NULL, merge_similarity = NULL)
+\S4method{get_enrichment}{STRINGdb}(string_ids, category = "All", methodMT = NULL, iea = NULL, minScore = NULL, max_fdr = NULL, min_gene_count = NULL, min_strength = NULL, min_signal = NULL, merge_similarity = NULL, add_scores = FALSE, caller_identity = "STRINGdb-package")
 }
 \arguments{
   \item{string_ids}{
@@ -40,11 +40,19 @@ optional filter: the lowest signal of a term, STRING's balance of strength and F
   \item{merge_similarity}{
 optional: merges the terms whose protein sets overlap at least this much (above \code{0}, at most \code{1}; \code{1} merges identical sets only) into the most significant of them.
 }
+  \item{add_scores}{
+\code{TRUE} adds STRING's \code{strength} and \code{signal} columns to the returned table, before \code{p_value}. The default \code{FALSE} returns the table without them.
+}
+  \item{caller_identity}{
+caller identifier sent to STRING.
+}
 }
 \details{
-STRING applies the optional filters like the filters of the enrichment table on its website. Without them (the default \code{NULL}), no term is filtered. The returned table has no strength and signal columns.
+STRING applies the optional filters like the filters of the enrichment table on its website. Without them (the default \code{NULL}), no term is filtered.
 
-The filters need STRING version 12.5 or later. An older version, such as \code{version="12.0"}, would ignore them, so they are not used there, with a warning.
+By default the returned table has no strength and signal columns. With \code{add_scores=TRUE}, STRING inserts them before \code{p_value}, so that the columns are \code{category}, \code{term}, \code{number_of_genes}, \code{number_of_genes_in_background}, \code{ncbiTaxonId}, \code{inputGenes}, \code{preferredNames}, \code{strength}, \code{signal}, \code{p_value}, \code{fdr} and \code{description}. The strength of a term is \code{log10(observed / expected)}; its signal is STRING's balance of strength and FDR.
+
+The filters and \code{add_scores} need STRING version 12.5 or later. An older version, such as \code{version="12.0"}, would ignore them, so they are not used there, with a warning.
 }
 \value{
 Data frame containing the enrichment in pathways of the vector of STRING proteins that is given in input.

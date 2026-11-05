@@ -1,3 +1,8 @@
+# test_new_options_with_version_12_0 calls STRING; it is deactivated when STRING cannot be reached
+# (helper_live_string.R).
+source(system.file("unitTests", "helper_live_string.R", package = "STRINGdb"), local = TRUE)
+
+
 test_options_supported_by_version <- function() {
 
   # Notes whether a call warned, and muffles the warning.
@@ -37,50 +42,54 @@ test_options_supported_by_version <- function() {
 
 test_new_options_with_version_12_0 <- function() {
 
-  # Notes whether a call warned, and muffles the warning.
-  call_and_note_warning <- function(expression) {
-    warned <- FALSE
-    value <- withCallingHandlers(
-      expression,
-      warning = function(w) {
-        warned <<- TRUE
-        invokeRestart("muffleWarning")
-      }
+  with_live_string({
+
+    # Notes whether a call warned, and muffles the warning.
+    call_and_note_warning <- function(expression) {
+      warned <- FALSE
+      value <- withCallingHandlers(
+        expression,
+        warning = function(w) {
+          warned <<- TRUE
+          invokeRestart("muffleWarning")
+        }
+      )
+      return(list(value = value, warned = warned))
+    }
+
+    string_db <- STRINGdb$new(version = "12.0", species = 9606, score_threshold = 400)
+
+    # TP53, MDM2, CDKN1A, ATM, EGFR, KRAS, GRB2, SOS1, PTEN and AKT1
+    string_ids <- c(
+      "9606.ENSP00000269305", "9606.ENSP00000258149", "9606.ENSP00000384849", "9606.ENSP00000278616",
+      "9606.ENSP00000275493", "9606.ENSP00000256078", "9606.ENSP00000376345", "9606.ENSP00000384675",
+      "9606.ENSP00000361021", "9606.ENSP00000451828"
     )
-    return(list(value = value, warned = warned))
-  }
 
-  string_db <- STRINGdb$new(version = "12.0", species = 9606, score_threshold = 400)
+    # The options of version 12.5 are not sent to version 12.0, with a warning, and the calls still work.
 
-  # TP53, MDM2, CDKN1A, ATM, EGFR, KRAS, GRB2, SOS1, PTEN and AKT1
-  string_ids <- c(
-    "9606.ENSP00000269305", "9606.ENSP00000258149", "9606.ENSP00000384849", "9606.ENSP00000278616",
-    "9606.ENSP00000275493", "9606.ENSP00000256078", "9606.ENSP00000376345", "9606.ENSP00000384675",
-    "9606.ENSP00000361021", "9606.ENSP00000451828"
-  )
+    enrichment <- call_and_note_warning(string_db$get_enrichment(string_ids, max_fdr = 0.001))
+    checkTrue(enrichment$warned)
+    checkTrue(nrow(enrichment$value) > 0)
 
-  # The options of version 12.5 are not sent to version 12.0, with a warning, and the calls still work.
+    figure <- call_and_note_warning(
+      string_db$get_enrichment_figure(string_ids, output_format = "svg", graph_type = "barplot", sort_by = "FDR")
+    )
+    checkTrue(figure$warned)
+    checkTrue(grepl("<svg", figure$value, fixed = TRUE))
 
-  enrichment <- call_and_note_warning(string_db$get_enrichment(string_ids, max_fdr = 0.001))
-  checkTrue(enrichment$warned)
-  checkTrue(nrow(enrichment$value) > 0)
+    picture <- call_and_note_warning(
+      string_db$get_png(string_ids, output_format = "svg", network_clustering_algorithm = "leiden", show_cluster_names = TRUE)
+    )
+    checkTrue(picture$warned)
+    checkTrue(grepl("<svg", picture$value, fixed = TRUE))
 
-  figure <- call_and_note_warning(
-    string_db$get_enrichment_figure(string_ids, output_format = "svg", graph_type = "barplot", sort_by = "FDR")
-  )
-  checkTrue(figure$warned)
-  checkTrue(grepl("<svg", figure$value, fixed = TRUE))
+    # Calls without these options do not warn.
 
-  picture <- call_and_note_warning(
-    string_db$get_png(string_ids, output_format = "svg", network_clustering_algorithm = "leiden", show_cluster_names = TRUE)
-  )
-  checkTrue(picture$warned)
-  checkTrue(grepl("<svg", picture$value, fixed = TRUE))
+    figure <- call_and_note_warning(string_db$get_enrichment_figure(string_ids, output_format = "svg"))
+    checkTrue(!figure$warned)
+    checkTrue(grepl("<svg", figure$value, fixed = TRUE))
 
-  # Calls without these options do not warn.
-
-  figure <- call_and_note_warning(string_db$get_enrichment_figure(string_ids, output_format = "svg"))
-  checkTrue(!figure$warned)
-  checkTrue(grepl("<svg", figure$value, fixed = TRUE))
+  })
 
 }
