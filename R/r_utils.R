@@ -929,6 +929,13 @@ downloadAbsentFile <- function(urlStr, oD = tempdir()) {
     partialFile <- tempfile(pattern = paste(fileName, ".", sep = ""), tmpdir = oD, fileext = ".part")
     on.exit(unlink(partialFile), add = TRUE)
 
+    # R's option timeout (60 s unless set) limits the whole transfer, so a large STRING file that
+    # arrives more slowly is cut off. As the help of download.file recommends for packages, the
+    # download gets at least 300 s; a higher timeout of the user is kept. The option is restored
+    # afterwards.
+    previousOptions <- options(timeout = max(300, getOption("timeout")))
+    on.exit(options(previousOptions), add = TRUE)
+
     downloadStatus <- download.file(urlStr, partialFile)
 
     # 0 is a finished download; the external methods ("wget" and "curl") return the non-zero exit
@@ -1046,16 +1053,19 @@ renameColDf <- function(df, colOldName, colNewName) {
 
 
 ############################################################################################
-## STRING's values/ranks enrichment (get_gsea): the "Proteins with Values/Ranks" analysis
-## of the STRING website, a GSEA of a whole ranked experiment. It runs on STRING's job
+## STRING's values/ranks enrichment (get_values_ranks_enrichment): the "Proteins with
+## Values/Ranks" analysis of the STRING website, a GSEA-like gene set enrichment analysis of a
+## whole ranked experiment that is computed on STRING's servers, not locally, with STRING's own
+## statistics (Kolmogorov-Smirnov and aggregate fold change tests, not the running-sum score of
+## Subramanian et al.). It runs on STRING's job
 ## queue: get_api_key gives an anonymous key, valuesranks_enrichment_submit queues a job,
 ## valuesranks_enrichment_status reports it, and the results of a finished job are
 ## downloaded from its download_url (api/tsv/downloadenrichmentresults). The JSON methods
 ## answer their errors with HTTP 200 and a record whose status is "error".
 ############################################################################################
 
-# The highest FDR cutoff that get_gsea sends (ge_fdr). STRING accepts up to 1, but a
-# cutoff above 0.25 defeats the optimizations of the computation and can give huge results.
+# The highest FDR cutoff that get_values_ranks_enrichment sends (ge_fdr). STRING accepts up to 1,
+# but a cutoff above 0.25 defeats the optimizations of the computation and can give huge results.
 VALUES_RANKS_MAX_FDR <- 0.25
 
 # The columns of the results (api/tsv/downloadenrichmentresults), for an answer without terms.
@@ -1175,7 +1185,7 @@ values_ranks_error_message <- function(message) {
   if (grepl("Authorizing the api key", message, fixed = TRUE)) {
     return(paste(
       "STRING is still activating this API key (\"", message, "\"). Activating a new key can take up to ",
-      "an hour; please try again later.",
+      "15 minutes; please try again later.",
       sep = ""
     ))
   }
@@ -1192,7 +1202,7 @@ values_ranks_error_message <- function(message) {
 # How to get the results of a values/ranks job later, for the messages of a job that may
 # still be running or whose results were not downloaded.
 values_ranks_resume_hint <- function(job_id) {
-  return(paste("Get its results later with string_db$get_gsea_results(\"", job_id, "\").", sep = ""))
+  return(paste("Get its results later with string_db$get_values_ranks_results(\"", job_id, "\").", sep = ""))
 }
 
 
@@ -1231,7 +1241,7 @@ is_interrupted_request <- function(condition) {
 }
 
 
-# Returns the API key for get_gsea, or stops with how to get one.
+# Returns the API key for get_values_ranks_enrichment, or stops with how to get one.
 resolve_values_ranks_api_key <- function(api_key) {
   if (is.null(api_key) || length(api_key) != 1 || is.na(api_key) || nchar(trimws(api_key)) == 0) {
     stop(
@@ -1244,7 +1254,7 @@ resolve_values_ranks_api_key <- function(api_key) {
 }
 
 
-# Checks the options of get_gsea and returns them as parameters of
+# Checks the options of get_values_ranks_enrichment and returns them as parameters of
 # valuesranks_enrichment_submit.
 #   max_fdr         the FDR cutoff of the reported terms (ge_fdr): above 0, at most 0.25
 #   rank_direction  "descending" (rank 1 is the largest value, and "top" the end of the
@@ -1353,7 +1363,7 @@ submit_values_ranks_job <- function(stable_url, species, input_text, api_key, op
 # finished job. A request that STRING refuses, which it answers with an error record without
 # a job_id, stops with a values_ranks_refused error, and so does an answer without a record.
 # STRING keeps each job for the key that submitted it, and that key was accepted by the
-# submission, so a refusal means that another key was given (e.g. to get_gsea_results); a new
+# submission, so a refusal means that another key was given (e.g. to get_values_ranks_results); a new
 # key cannot help. An answer without a record comes from a job that STRING has confirmed for
 # this key but whose state it lost: the job failed on STRING.
 get_values_ranks_job_status <- function(stable_url, api_key, job_id, caller_identity = "STRINGdb-package",
@@ -1382,7 +1392,7 @@ get_values_ranks_job_status <- function(stable_url, api_key, job_id, caller_iden
     }
     explanation <- paste(
       explanation, " STRING keeps each job for the API key that submitted it; please use the same key ",
-      "as for get_gsea (STRINGDB_API_KEY or api_key).",
+      "as for get_values_ranks_enrichment (STRINGDB_API_KEY or api_key).",
       sep = ""
     )
     stop(values_ranks_refused_error(paste(

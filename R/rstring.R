@@ -550,9 +550,11 @@ Author(s):
     get_api_key = function(caller_identity = "STRINGdb-package") {
       '
 Description:
-  Requests an API key from STRING for its values/ranks enrichment (get_gsea). STRING gives the key
-  without registration. Please request a key only once and keep it: store it as STRINGDB_API_KEY in
-  your ~/.Renviron file, where get_gsea finds it.
+  Requests an API key from STRING for its values/ranks enrichment (get_values_ranks_enrichment), a
+  GSEA-like enrichment analysis computed on STRING\'s servers, not locally. STRING gives the key
+  without registration; a key requested with the default caller_identity works at once. Please request
+  a key only once and keep it: store it as STRINGDB_API_KEY in your ~/.Renviron file, where
+  get_values_ranks_enrichment finds it.
 
 Input parameters:
   "caller_identity"   caller identifier sent to STRING.
@@ -569,7 +571,7 @@ Author(s):
       }
       message(
         "Your STRING API key: ", key$api_key, "\n", note,
-        "Keep it, so that get_gsea() finds it: add the line\n",
+        "Keep it, so that get_values_ranks_enrichment() finds it: add the line\n",
         "  STRINGDB_API_KEY=", key$api_key, "\n",
         "to your ~/.Renviron file (e.g. with usethis::edit_r_environ()) and restart R.\n",
         "Please request a key only once."
@@ -578,22 +580,28 @@ Author(s):
     },
 
     #########################################
-    ## get_gsea
+    ## get_values_ranks_enrichment
     #########################################
 
-    get_gsea = function(string_ids, values, max_fdr = 0.01, rank_direction = "descending", timeout = 7200,
-                        api_key = Sys.getenv("STRINGDB_API_KEY"), quiet = FALSE, caller_identity = "STRINGdb-package") {
+    get_values_ranks_enrichment = function(string_ids, values, max_fdr = 0.01, rank_direction = "descending",
+                                           timeout = 7200, api_key = Sys.getenv("STRINGDB_API_KEY"), quiet = FALSE,
+                                           caller_identity = "STRINGdb-package") {
       '
 Description:
-  Runs STRING\'s values/ranks enrichment (a GSEA, "Proteins with Values/Ranks" on the STRING website)
-  on a whole ranked experiment, e.g. all measured proteins with their log fold changes, without any
-  cutoff. The analysis runs on STRING\'s servers: the method submits a job, waits for it and downloads
-  the results. The identifiers and values are sent to STRING.
+  A GSEA-like gene set enrichment analysis of a whole ranked experiment, computed on STRING\'s servers,
+  not locally: STRING\'s values/ranks enrichment ("Proteins with Values/Ranks" on the STRING website).
+  The method submits a job to STRING\'s job queue, waits for it and downloads the results; the
+  identifiers and values are sent to STRING. Give it all measured proteins with their values, e.g. log
+  fold changes, without any cutoff. It reports the terms whose proteins gather at the top, at the
+  bottom or at both ends of the ranked list. STRING tests each term with a Kolmogorov-Smirnov test and
+  small terms also with an aggregate fold change test, with the Benjamini-Hochberg FDR within each
+  category; these statistics differ from the GSEA of Subramanian et al. (e.g. fgsea or
+  clusterProfiler), so the scores and FDRs of the two cannot be compared.
   Returns a data frame with STRING\'s columns (category, termID, termDescription, genesMapped,
   genesInSet, enrichmentScore, direction, falseDiscoveryRate, method, proteinIDs, proteinLabels,
   proteinInputLabels, proteinInputValues, proteinRanks) and the attributes job_id, page_url,
   graph_url, download_url and string_version. If the wait ends (timeout or interrupt), the job keeps
-  running on STRING: get its results later with get_gsea_results(job_id).
+  running on STRING: get its results later with get_values_ranks_results(job_id).
 
 Input parameters:
   "string_ids"      vector of STRING identifiers (e.g. the STRING_id column of map()), one per value.
@@ -638,19 +646,22 @@ Author(s):
     },
 
     #########################################
-    ## get_gsea_results
+    ## get_values_ranks_results
     #########################################
 
-    get_gsea_results = function(job_id, timeout = 7200, api_key = Sys.getenv("STRINGDB_API_KEY"), quiet = FALSE,
-                                caller_identity = "STRINGdb-package") {
+    get_values_ranks_results = function(job_id, timeout = 7200, api_key = Sys.getenv("STRINGDB_API_KEY"),
+                                        quiet = FALSE, caller_identity = "STRINGdb-package") {
       '
 Description:
-  Returns the results of a values/ranks job submitted with get_gsea (see there), waiting for the job if
-  it is not finished yet, e.g. after the wait of get_gsea timed out or was interrupted, or in a new R
-  session. STRING keeps the results for a limited time.
+  Returns the results of a values/ranks job (STRING\'s GSEA-like enrichment, computed on STRING\'s
+  servers) submitted with get_values_ranks_enrichment
+  (see there), waiting for the job if it is not finished yet, e.g. after the wait of
+  get_values_ranks_enrichment timed out or was interrupted, or in a new R session. STRING keeps the
+  results for a limited time.
 
 Input parameters:
-  "job_id"          the job identifier (the job_id attribute of the results of get_gsea, or its messages).
+  "job_id"          the job identifier (the job_id attribute of the results of
+                      get_values_ranks_enrichment, or its messages).
   "timeout"         seconds to wait for the job (default 7200).
   "api_key"         the STRING API key that submitted the job (default: the environment variable
                       STRINGDB_API_KEY). STRING keeps each job for the key that submitted it.

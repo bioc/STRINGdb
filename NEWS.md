@@ -2,13 +2,15 @@
 
 ## New features
 
-- `get_gsea()` runs STRING's values/ranks enrichment, a gene set enrichment analysis (GSEA) of a whole
-  ranked experiment ("Proteins with Values/Ranks" on the STRING website), on STRING's job queue. It
-  submits the job, waits for it and returns the enriched terms as a data frame, with the direction of
-  each term (top, bottom or both ends of the ranked list) and the job's addresses on the STRING
-  website. `get_gsea_results()` gets the results of a job later, for example after a timeout, an
-  interrupt or in a new R session. `get_api_key()` requests the API key that these methods need; store
-  it as `STRINGDB_API_KEY` in `~/.Renviron`.
+- `get_values_ranks_enrichment()` runs a GSEA-like gene set enrichment analysis of a whole ranked
+  experiment, computed on STRING's servers, not locally: STRING's values/ranks enrichment ("Proteins
+  with Values/Ranks" on the STRING website), on STRING's job queue. It submits the job, waits for it
+  and returns the enriched terms as a data frame, with the direction of each term (top, bottom or both
+  ends of the ranked list) and the job's addresses on the STRING website. STRING's statistics differ
+  from the GSEA of Subramanian et al. (e.g. fgsea or clusterProfiler); its help explains how.
+  `get_values_ranks_results()` gets the results of a job later, for example after a timeout, an
+  interrupt or in a new R session. `get_api_key()` requests the API key that these methods need, which
+  works at once; store it as `STRINGDB_API_KEY` in `~/.Renviron`.
 - `get_enrichment(add_scores = TRUE)` adds STRING's strength and signal columns (STRING 12.5).
 - `get_enrichment_figure()` accepts the categories GWAS and Hallmark, the palette `"red_blue"` and
   `x_axis = "count"` (STRING 12.5). With an older version these values stop with an error instead of
@@ -27,6 +29,8 @@
   file. `downloadAbsentFile()` saves a download under a temporary name and gives it the file's name only
   when it has finished. A part left by an older version in a kept `input_directory` is not detected;
   delete it to download the file again.
+- A download of a STRING file may take up to 300 seconds instead of R's default timeout of 60 seconds,
+  which cut off the larger files on a slower connection. A higher `options(timeout)` is kept.
 
 ## Other changes
 

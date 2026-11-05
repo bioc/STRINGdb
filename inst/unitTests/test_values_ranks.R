@@ -1,4 +1,4 @@
-# Offline tests of STRING's values/ranks enrichment (get_gsea, get_gsea_results,
+# Offline tests of STRING's values/ranks enrichment (get_values_ranks_enrichment, get_values_ranks_results,
 # get_api_key). The requests to STRING are replaced by stand-ins (send, fetch), and so are
 # the waits (sleep, clock), so that these tests need neither a network nor an API key.
 
@@ -45,7 +45,7 @@ values_ranks_tsv <- paste(
 )
 
 
-test_gsea_input_preparation <- function() {
+test_values_ranks_input_preparation <- function() {
 
   input <- STRINGdb:::prepare_values_ranks_input(
     c("9606.A", "9606.B", NA, "", "9606.A", "9606.C", "9606.D"),
@@ -65,7 +65,7 @@ test_gsea_input_preparation <- function() {
 }
 
 
-test_gsea_options <- function() {
+test_values_ranks_options <- function() {
 
   options <- STRINGdb:::normalize_values_ranks_options(0.01, "descending")
   checkEquals("0.01", options$ge_fdr)
@@ -85,7 +85,7 @@ test_gsea_options <- function() {
 }
 
 
-test_gsea_submit <- function() {
+test_values_ranks_submit <- function() {
 
   log <- new.env()
   send <- fake_string_json(list(list(list(job_id = "job123", status = "submitted", message = "Job was successfully submitted to the queue!"))), log)
@@ -120,7 +120,7 @@ test_gsea_submit <- function() {
 }
 
 
-test_gsea_wait <- function() {
+test_values_ranks_wait <- function() {
 
   # submitted, then running, then finished: the waits grow from 5 s
   waits <- fake_waits()
@@ -152,7 +152,7 @@ test_gsea_wait <- function() {
   error_message <- tryCatch(STRINGdb:::wait_for_values_ranks_job("u", "key1", "job123", 60, quiet = TRUE, send = send, sleep = waits$sleep, clock = waits$clock),
     error = function(e) conditionMessage(e))
   checkTrue(grepl("did not finish within 60 seconds", error_message, fixed = TRUE))
-  checkTrue(grepl("get_gsea_results(\"job123\")", error_message, fixed = TRUE))
+  checkTrue(grepl("get_values_ranks_results(\"job123\")", error_message, fixed = TRUE))
 
   # a failed status request is tried again; five in a row give up
   waits <- fake_waits()
@@ -164,7 +164,7 @@ test_gsea_wait <- function() {
   error_message <- tryCatch(STRINGdb:::wait_for_values_ranks_job("u", "key1", "job123", 7200, quiet = TRUE, send = send, sleep = fake_waits()$sleep),
     error = function(e) conditionMessage(e))
   checkTrue(grepl("could not be read", error_message, fixed = TRUE))
-  checkTrue(grepl("get_gsea_results(\"job123\")", error_message, fixed = TRUE))
+  checkTrue(grepl("get_values_ranks_results(\"job123\")", error_message, fixed = TRUE))
 
   # the status request is a POST with the key and the job, not a URL with the key
   log <- new.env()
@@ -224,12 +224,12 @@ test_gsea_wait <- function() {
     error = function(e) conditionMessage(e))
   checkEquals(1, length(log$requests))
   checkTrue(grepl("was interrupted", error_message, fixed = TRUE))
-  checkTrue(grepl("get_gsea_results(\"job123\")", error_message, fixed = TRUE))
+  checkTrue(grepl("get_values_ranks_results(\"job123\")", error_message, fixed = TRUE))
 
 }
 
 
-test_gsea_wait_progress <- function() {
+test_values_ranks_wait_progress <- function() {
 
   # the state is the first word of STRING's status, without dots
   checkEquals("failure", STRINGdb:::values_ranks_state("failure."))
@@ -259,7 +259,7 @@ test_gsea_wait_progress <- function() {
 }
 
 
-test_gsea_results <- function() {
+test_values_ranks_results <- function() {
 
   results <- STRINGdb:::read_values_ranks_results(values_ranks_tsv, "job123")
   checkEquals(STRINGdb:::VALUES_RANKS_RESULT_COLUMNS, colnames(results))
@@ -321,7 +321,7 @@ test_gsea_results <- function() {
     error = function(e) conditionMessage(e))
   checkTrue(grepl("results of values/ranks job job123 could not be downloaded", error_message, fixed = TRUE))
   checkTrue(grepl("Session Expired", error_message, fixed = TRUE))
-  checkTrue(grepl("get_gsea_results(\"job123\")", error_message, fixed = TRUE))
+  checkTrue(grepl("get_values_ranks_results(\"job123\")", error_message, fixed = TRUE))
 
   # an interrupt during the download says how to get the results later
   send <- fake_string_json(list(status_record("success", "Job finished", "https://example.org/download")))
@@ -337,7 +337,7 @@ test_gsea_results <- function() {
       invokeRestart("muffleMessage")
     }
   )
-  checkTrue(any(grepl("were not downloaded", shown, fixed = TRUE) & grepl("get_gsea_results(\"job123\")", shown, fixed = TRUE)))
+  checkTrue(any(grepl("were not downloaded", shown, fixed = TRUE) & grepl("get_values_ranks_results(\"job123\")", shown, fixed = TRUE)))
 
   expired <- "Error\tErrorMessage\nSession Expired\tUser-results are usually deleted after three days."
   checkEquals("Session Expired: User-results are usually deleted after three days.", STRINGdb:::string_tsv_error_message(expired))
@@ -365,10 +365,10 @@ test_gsea_results <- function() {
 }
 
 
-test_gsea_api_key <- function() {
+test_values_ranks_api_key <- function() {
 
   log <- new.env()
-  send <- fake_string_json(list(list(list(api_key = "newkey", note = "This key will be activated within 30 minutes."))), log)
+  send <- fake_string_json(list(list(list(api_key = "newkey", note = "This key will be activated within 15 minutes."))), log)
   key <- STRINGdb:::request_string_api_key("https://version-12-5.string-db.org", send = send)
   checkEquals("newkey", key$api_key)
   checkTrue(grepl("activated", key$note, fixed = TRUE))
@@ -378,31 +378,31 @@ test_gsea_api_key <- function() {
   checkException(STRINGdb:::request_string_api_key("u", send = fake_string_json(list(list()))), silent = TRUE)
 
   # a key that STRING is still activating
-  checkTrue(grepl("up to an hour", STRINGdb:::values_ranks_error_message("Authorizing the api key. Please be patient."), fixed = TRUE))
+  checkTrue(grepl("up to 15 minutes", STRINGdb:::values_ranks_error_message("Authorizing the api key. Please be patient."), fixed = TRUE))
 
 }
 
 
-test_gsea_method_checks <- function() {
+test_values_ranks_method_checks <- function() {
 
   # the methods check their input before any request to STRING
   string_db <- STRINGdb$new(version = "12.5", species = 9606, score_threshold = 400)
 
-  error_message <- tryCatch(string_db$get_gsea("9606.A", 1, api_key = ""), error = function(e) conditionMessage(e))
+  error_message <- tryCatch(string_db$get_values_ranks_enrichment("9606.A", 1, api_key = ""), error = function(e) conditionMessage(e))
   checkTrue(grepl("needs an API key", error_message, fixed = TRUE))
 
-  error_message <- tryCatch(string_db$get_gsea("9606.A", 1, max_fdr = 0.5, api_key = "key1"), error = function(e) conditionMessage(e))
+  error_message <- tryCatch(string_db$get_values_ranks_enrichment("9606.A", 1, max_fdr = 0.5, api_key = "key1"), error = function(e) conditionMessage(e))
   checkTrue(grepl("at most 0.25", error_message, fixed = TRUE))
 
-  error_message <- tryCatch(string_db$get_gsea_results(c("a", "b"), api_key = "key1"), error = function(e) conditionMessage(e))
+  error_message <- tryCatch(string_db$get_values_ranks_results(c("a", "b"), api_key = "key1"), error = function(e) conditionMessage(e))
   checkTrue(grepl("one job identifier", error_message, fixed = TRUE))
 
 }
 
 
-test_gsea_method_requests <- function() {
+test_values_ranks_method_requests <- function() {
 
-  # get_gsea, get_gsea_results and get_api_key send their caller_identity with every request, and
+  # get_values_ranks_enrichment, get_values_ranks_results and get_api_key send their caller_identity with every request, and
   # get_api_key asks by POST. The transport functions are replaced for this test (and restored at its
   # end), and the object points to an unreachable address, so that no request can reach STRING.
   requests <- list()
@@ -430,7 +430,7 @@ test_gsea_method_requests <- function() {
   string_db <- STRINGdb$new(version = "12.5", species = 9606, score_threshold = 400)
   string_db$stable_url <- "https://127.0.0.1:9"
 
-  results <- string_db$get_gsea(c("9606.A", "9606.B"), c(1.5, -2), api_key = "key1", quiet = TRUE, caller_identity = "my-tool")
+  results <- string_db$get_values_ranks_enrichment(c("9606.A", "9606.B"), c(1.5, -2), api_key = "key1", quiet = TRUE, caller_identity = "my-tool")
   checkEquals(2, nrow(results))
   checkEquals(
     c("https://127.0.0.1:9/api/json/valuesranks_enrichment_submit", "https://127.0.0.1:9/api/json/valuesranks_enrichment_status",
@@ -442,7 +442,7 @@ test_gsea_method_requests <- function() {
   }
 
   requests <- list()
-  string_db$get_gsea_results("job123", api_key = "key1", quiet = TRUE, caller_identity = "my-tool")
+  string_db$get_values_ranks_results("job123", api_key = "key1", quiet = TRUE, caller_identity = "my-tool")
   checkEquals(2, length(requests))
   for (request in requests) {
     checkEquals("my-tool", request$params$caller_identity)

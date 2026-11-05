@@ -48,6 +48,7 @@ test_download_absent_file <- function() {
   aliases_name <- "9606.protein.aliases.v12.5.txt.gz"
   aliases_source <- file.path(source_directory, aliases_name)
   writeLines(c("all", "aliases"), aliases_source)
+  timeout_before <- getOption("timeout")
 
   # The trace is removed also when the test stops early: the later tests of the same R session download
   # with download.file() as well.
@@ -75,9 +76,53 @@ test_download_absent_file <- function() {
 
   checkTrue(grepl("^download from 'file://.*failed$", error_message))
   checkEquals(info_name, list.files(cache))
+  # R's timeout, raised for the download, is restored also after a failed download
+  checkEquals(timeout_before, getOption("timeout"))
 
   path <- STRINGdb::downloadAbsentFile(local_file_url(aliases_source), oD = cache)
   checkEquals(c("all", "aliases"), readLines(path))
   checkEquals(sort(c(info_name, aliases_name)), sort(list.files(cache)))
+
+}
+
+
+test_download_absent_file_timeout <- function() {
+
+  cache <- tempfile("download_cache")
+  source_directory <- tempfile("download_source")
+  dir.create(cache)
+  dir.create(source_directory)
+  on.exit(unlink(c(cache, source_directory), recursive = TRUE), add = TRUE)
+
+  previous_timeout <- getOption("timeout")
+  on.exit(options(timeout = previous_timeout), add = TRUE)
+
+  # download.file() is traced to note R's timeout during each download; the trace is removed also when
+  # the test stops early
+  seen <- new.env()
+  seen$timeouts <- numeric(0)
+  suppressMessages(trace("download.file", where = asNamespace("STRINGdb"), print = FALSE,
+    tracer = bquote(assign("timeouts", c(.(seen)$timeouts, getOption("timeout")), envir = .(seen)))))
+  on.exit(suppressMessages(untrace("download.file", where = asNamespace("STRINGdb"))), add = TRUE)
+
+  # R's default timeout of 60 s is raised to 300 s for the download, and restored afterwards.
+  options(timeout = 60)
+  info_source <- file.path(source_directory, "9606.protein.info.v12.5.txt.gz")
+  writeLines("a file", info_source)
+  STRINGdb::downloadAbsentFile(local_file_url(info_source), oD = cache)
+  checkEquals(300, seen$timeouts[1])
+  checkEquals(60, getOption("timeout"))
+
+  # A higher timeout of the user is kept.
+  options(timeout = 1000)
+  aliases_source <- file.path(source_directory, "9606.protein.aliases.v12.5.txt.gz")
+  writeLines("another file", aliases_source)
+  STRINGdb::downloadAbsentFile(local_file_url(aliases_source), oD = cache)
+  checkEquals(1000, seen$timeouts[2])
+  checkEquals(1000, getOption("timeout"))
+
+  # A file in the cache is not downloaded again, so the timeout is not touched.
+  STRINGdb::downloadAbsentFile(local_file_url(aliases_source), oD = cache)
+  checkEquals(2, length(seen$timeouts))
 
 }
