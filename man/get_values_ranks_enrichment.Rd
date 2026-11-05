@@ -53,11 +53,11 @@ The false discovery rate is the Benjamini-Hochberg FDR within each category, and
 The identifiers and values are sent to STRING. The method checks the state of the jobs every few seconds (from 5 s, growing to 30 s) and downloads the results of each job as soon as it has finished, as STRING keeps them only for a limited time; a download that fails is tried again.
 When the wait ends early, the jobs keep running on STRING; get their results later with \code{get_values_ranks_results}.
 For a vector of values, the timeout, an interrupt with Ctrl-C or a lost connection ends the wait with an error whose message gives the job identifier.
-For a table of values, the timeout returns the results so far (see Value), and an interrupt or a lost connection ends with an error whose message lists the job identifiers.
+For a table of values, the timeout returns the results so far (see Value), and an interrupt or a lost connection ends with an error whose message lists the job identifiers (more than 20 are saved in a file of the R session, which the message names).
 STRING keeps each job for the API key that submitted it, so \code{get_values_ranks_results} needs the same key; the default \code{api_key=NULL} gives the same key on the same computer.
 
 \strong{Many experiments at once.} With a table of values, the method submits one job for each experiment before it waits, so that STRING's queue runs them side by side on STRING's servers, and returns all results.
-Up to 1000 jobs of an API key may wait or run on STRING at once: when STRING refuses a job because of this limit, the method submits it as soon as other jobs have finished.
+Up to 1000 jobs of an API key may wait or run on STRING at once: when STRING refuses a job because of this limit (also the job of a vector of values), the method submits it as soon as other jobs have finished, within the timeout.
 A job that fails does not stop the others. To submit without waiting, e.g. many experiments whose results are collected later or in another R session, use \code{submit_values_ranks_enrichment}, \code{get_values_ranks_status} and \code{get_values_ranks_results}.
 }
 \value{

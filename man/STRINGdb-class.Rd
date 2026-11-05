@@ -73,7 +73,7 @@ showClass("STRINGdb")
     \item{\code{submit_values_ranks_enrichment(string_ids, values, max_fdr=0.01, rank_direction="descending", api_key=NULL, quiet=FALSE, caller_identity="STRINGdb-package")}:}{ submits the values/ranks enrichment (GSEA-like, computed on STRING's servers) without waiting, and returns the job identifiers. }
     \item{\code{get_values_ranks_status(job_ids, api_key=NULL, caller_identity="STRINGdb-package")}:}{ the state of values/ranks jobs, from one request. }
     \item{\code{get_values_ranks_results(job_ids, timeout=7200, api_key=NULL, quiet=FALSE, caller_identity="STRINGdb-package")}:}{ the results of values/ranks jobs (GSEA-like, computed on STRING's servers), waiting for the unfinished ones. }
-    \item{\code{get_api_key(caller_identity="STRINGdb-package", new=FALSE)}:}{ the STRING API key of this computer for the values/ranks enrichment, GSEA-like and computed on STRING's servers. }
+    \item{\code{get_api_key(new=FALSE)}:}{ the STRING API key of this computer for the values/ranks enrichment, GSEA-like and computed on STRING's servers. }
     \item{\code{get_clusters(string_ids, algorithm)}:}{ ~~ }
     \item{\code{get_annotations_desc()}:}{ ~~ }
     \item{\code{get_annotations()}:}{ ~~ }

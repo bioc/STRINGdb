@@ -9,12 +9,9 @@ Returns the STRING API key of this computer for STRING's values/ranks enrichment
 STRING gives the key without registration.
 }
 \usage{
-\S4method{get_api_key}{STRINGdb}(caller_identity="STRINGdb-package", new=FALSE)
+\S4method{get_api_key}{STRINGdb}(new=FALSE)
 }
 \arguments{
-  \item{caller_identity}{
-caller identifier sent to STRING. A key requested with the default, \code{"STRINGdb-package"}, works at once.
-}
   \item{new}{
 \code{TRUE} requests a new key from STRING and saves it in place of the saved key (default \code{FALSE}).
 STRING keeps each job for the key that submitted it, so the jobs of the earlier key can no longer be read with the new one.
@@ -29,7 +26,7 @@ When R sessions of one computer request its first key at the same time, all of t
 When STRING no longer knows the saved key (it says so for a submission and again for a status request, so that a short outage of STRING does not count), the values/ranks methods request a new key, and save it in place of the old one once STRING has taken a job with it; a warning gives both keys.
 \code{get_api_key(new = TRUE)} also shows the key that it replaces.
 
-A key that the package requests with its default \code{caller_identity} works at once. STRING activates other new keys before it accepts them, for example a key requested with another \code{caller_identity} or outside R, which can take up to 15 minutes; until then, the values/ranks methods stop with a message that STRING is still activating the key.
+The package requests its keys with the caller identity \code{"STRINGdb-package"}, with which STRING makes a key work at once. STRING activates other new keys, for example a key requested outside R and given as \code{STRINGDB_API_KEY}, before it accepts them, which can take up to 15 minutes; until then, the values/ranks methods stop with a message that STRING is still activating the key.
 }
 \value{
 The API key (invisibly). A message shows it, and where it comes from.

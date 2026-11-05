@@ -487,14 +487,15 @@ test_values_ranks_method_requests <- function() {
     checkEquals("my-tool", request$params$caller_identity)
   }
 
-  # get_api_key requests a key only when this computer has none (here a temporary key file)
+  # get_api_key requests a key only when this computer has none (here a temporary key file), with
+  # the package's caller identity, so that the key works at once
   with_temporary_key_file({
     requests <- list()
-    key <- suppressMessages(string_db$get_api_key(caller_identity = "my-tool"))
+    key <- suppressMessages(string_db$get_api_key())
     checkEquals("newkey", key)
     checkEquals(1, length(requests))
     checkEquals("https://127.0.0.1:9/api/json/get_api_key", requests[[1]]$url)
-    checkEquals(list(caller_identity = "my-tool"), requests[[1]]$params)
+    checkEquals(list(caller_identity = "STRINGdb-package"), requests[[1]]$params)
   })
 
 }
@@ -1365,5 +1366,79 @@ test_values_ranks_get_api_key <- function() {
     checkEquals("envkey", keep_messages(string_db$get_api_key()))
     checkEquals(2, log$count)
   })
+
+}
+
+
+test_values_ranks_single_waits_and_long_hint <- function() {
+
+  options <- STRINGdb:::normalize_values_ranks_options(0.01, "descending")
+  key_info <- list(key = "key1", source = "argument")
+
+  # one experiment that STRING cannot take now (its limit of active jobs) is submitted as soon as
+  # STRING takes it, within the timeout
+  log <- new.env()
+  log$submissions <- 0
+  limit_twice <- function(url_str, params, timeout_seconds = 60) {
+    log$submissions <- log$submissions + 1
+    if (log$submissions <= 2) {
+      return(list(list(job_id = "", status = "error", message = "Job submission limit reached. Please wait for your jobs to finish before submitting new ones.")))
+    }
+    return(list(list(job_id = "job5", status = "submitted", message = "")))
+  }
+  waits <- fake_waits()
+  shown <- character(0)
+  submission <- withCallingHandlers(
+    STRINGdb:::submit_values_ranks_job_when_possible("https://s", 9606, "9606.A\t1", key_info, options, 600,
+                                                     send = limit_twice, sleep = waits$sleep, clock = waits$clock),
+    message = function(m) {
+      shown <<- c(shown, conditionMessage(m))
+      invokeRestart("muffleMessage")
+    }
+  )
+  checkEquals("job5", submission$job_id)
+  checkEquals(3, log$submissions)
+  checkEquals(12.5, submission$waited)
+  checkEquals(1, length(shown))
+  checkTrue(grepl("submitted as soon as STRING takes it", shown, fixed = TRUE))
+
+  # the timeout ends the wait for a submission with an error
+  waits <- fake_waits()
+  always_full <- function(url_str, params, timeout_seconds = 60) {
+    return(list(list(job_id = "", status = "error", message = "Too many jobs (> 10000) in the STRING queue")))
+  }
+  error_message <- tryCatch(
+    STRINGdb:::submit_values_ranks_job_when_possible("https://s", 9606, "9606.A\t1", key_info, options, 10, quiet = TRUE,
+                                                     send = always_full, sleep = waits$sleep, clock = waits$clock),
+    error = function(e) conditionMessage(e)
+  )
+  checkTrue(grepl("did not take the values/ranks job within 10 seconds: Too many jobs", error_message, fixed = TRUE))
+
+  # other refusals stop at once
+  wrong_species <- function(url_str, params, timeout_seconds = 60) {
+    return(list(list(job_id = "", status = "error", message = "Species not found.")))
+  }
+  waits <- fake_waits()
+  error_message <- tryCatch(
+    STRINGdb:::submit_values_ranks_job_when_possible("https://s", 9606, "9606.A\t1", key_info, options, 600, quiet = TRUE,
+                                                     send = wrong_species, sleep = waits$sleep, clock = waits$clock),
+    error = function(e) conditionMessage(e)
+  )
+  checkTrue(grepl("Species not found", error_message, fixed = TRUE))
+  checkEquals(numeric(0), waits$intervals)
+
+  # many job ids: saved in a file of the R session instead of a long message
+  job_ids <- paste("job", 1:25, sep = "")
+  names(job_ids) <- paste("experiment", 1:25, sep = "_")
+  hint <- STRINGdb:::values_ranks_jobs_hint(job_ids)
+  checkTrue(nchar(hint) < 400)
+  job_ids_file <- regmatches(hint, regexpr("readRDS\\(\"[^\"]+\"\\)", hint))
+  job_ids_file <- sub("^readRDS\\(\"", "", sub("\"\\)$", "", job_ids_file))
+  checkTrue(file.exists(job_ids_file))
+  checkEquals(job_ids, readRDS(job_ids_file))
+  unlink(job_ids_file)
+
+  # a few job ids are listed in the message itself
+  checkTrue(grepl("c(A = \"job1\", B = \"job2\")", STRINGdb:::values_ranks_jobs_hint(c(A = "job1", B = "job2")), fixed = TRUE))
 
 }

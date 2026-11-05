@@ -547,19 +547,18 @@ Author(s):
     ## get_api_key
     #########################################
 
-    get_api_key = function(caller_identity = "STRINGdb-package", new = FALSE) {
+    get_api_key = function(new = FALSE) {
       '
 Description:
   Returns the STRING API key that the values/ranks methods (get_values_ranks_enrichment, a GSEA-like
   enrichment analysis computed on STRING\'s servers, not locally) use on this computer: the
   environment variable STRINGDB_API_KEY when it is set, otherwise the key that the package saved on
   this computer, otherwise a new key from STRING, which it saves. STRING gives the key without
-  registration; a key requested with the default caller_identity works at once. The values/ranks
-  methods get the key in the same way, so calling get_api_key is needed only to see the key, e.g.
-  to use it on other computers as STRINGDB_API_KEY.
+  registration; the package requests it as STRINGdb-package, so that it works at once. The
+  values/ranks methods get the key in the same way, so calling get_api_key is needed only to see the
+  key, e.g. to use it on other computers as STRINGDB_API_KEY.
 
 Input parameters:
-  "caller_identity"   caller identifier sent to STRING.
   "new"               TRUE requests a new key from STRING and saves it in place of the saved key
                       (default FALSE). STRING keeps each job for the key that submitted it, so the
                       jobs of the earlier key are no longer read with the new one.
@@ -586,9 +585,10 @@ Author(s):
         }
       }
 
-      # the key that new = TRUE replaces is shown, as its jobs are read only with it
+      # the key that new = TRUE replaces is shown, as its jobs are read only with it. The key is
+      # requested with the package's caller identity, with which STRING makes it work at once.
       previous_key <- read_saved_api_key(key_file)
-      key <- request_string_api_key(stable_url, caller_identity)
+      key <- request_string_api_key(stable_url, VALUES_RANKS_KEY_CALLER_IDENTITY)
 
       # without new, a key that another R session saved meanwhile is kept, and used
       saved_key <- save_api_key(key$api_key, key_file, replace = new)
@@ -684,12 +684,17 @@ Author(s):
       key_info <- resolve_values_ranks_api_key(api_key, stable_url, request_new = TRUE, quiet = quiet)
 
       if (!prepared$several) {
+        # like the jobs of a table, the job waits for STRING's limit of active jobs of the API key
         input <- prepared$experiments[[1]]
-        submission <- submit_first_values_ranks_job(stable_url, species, input$text, key_info, options, caller_identity, quiet)
+        submission <- submit_values_ranks_job_when_possible(
+          stable_url, species, input$text, key_info, options, timeout, caller_identity, quiet
+        )
         if (!quiet) {
           message("Submitted ", input$n_submitted, " proteins to STRING's values/ranks enrichment (job ", submission$job_id, ").")
         }
-        return(collect_values_ranks_results(stable_url, submission$key_info$key, submission$job_id, timeout, quiet, caller_identity))
+        # the time that the submission took counts towards the timeout
+        remaining_timeout <- max(1, timeout - submission$waited)
+        return(collect_values_ranks_results(stable_url, submission$key_info$key, submission$job_id, remaining_timeout, quiet, caller_identity))
       }
 
       run <- run_values_ranks_jobs(

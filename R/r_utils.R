@@ -1103,6 +1103,10 @@ VALUES_RANKS_RETRY_LATER_PATTERN <- "limit reached|too many submissions|too many
 # stays under R's limit of 1000 characters for a warning).
 VALUES_RANKS_EXPERIMENTS_IN_WARNING <- 3
 
+# The number of job ids that the message of a wait that ends early lists; more are saved in a file
+# (values_ranks_jobs_hint).
+VALUES_RANKS_JOB_IDS_IN_MESSAGE <- 20
+
 
 
 # The types of the result columns that are not text. The others are read as text, so that
@@ -1617,6 +1621,57 @@ submit_first_values_ranks_job <- function(stable_url, species, input_text, key_i
 }
 
 
+# Submits the job of one experiment (get_values_ranks_enrichment with a vector of values) as
+# submit_first_values_ranks_job does, but when STRING cannot take it now (is_retry_later_refusal,
+# e.g. the limit of active jobs of the API key), submits it again until STRING takes it or
+# timeout_seconds have passed, waiting between the tries from 5 s, growing to 30 s. Returns what
+# submit_first_values_ranks_job returns, and waited, the seconds that the submission took.
+submit_values_ranks_job_when_possible <- function(stable_url, species, input_text, key_info, options,
+                                                  timeout_seconds, caller_identity = "STRINGdb-package",
+                                                  quiet = FALSE, key_file = values_ranks_key_file(),
+                                                  send = post_string_json, sleep = Sys.sleep,
+                                                  clock = function() proc.time()[["elapsed"]]) {
+  started <- clock()
+  interval <- VALUES_RANKS_FIRST_POLL_INTERVAL
+  told <- FALSE
+
+  repeat {
+    submission <- tryCatch(
+      submit_first_values_ranks_job(stable_url, species, input_text, key_info, options, caller_identity, quiet, key_file, send),
+      error = function(e) e
+    )
+    if (!inherits(submission, "error")) {
+      submission$waited <- clock() - started
+      return(submission)
+    }
+    if (!is_retry_later_refusal(submission)) {
+      stop(submission)
+    }
+
+    # a replacement key that STRING has not taken yet is kept for the next try
+    if (!is.null(submission$key_info)) {
+      key_info <- submission$key_info
+    }
+    if (clock() - started >= timeout_seconds) {
+      stop(
+        "ERROR: STRING did not take the values/ranks job within ", timeout_seconds, " seconds: ",
+        submission$string_message,
+        call. = FALSE
+      )
+    }
+    if (!quiet && !told) {
+      message(
+        "STRING cannot take the values/ranks job now (", submission$string_message, "); it is submitted as ",
+        "soon as STRING takes it."
+      )
+      told <- TRUE
+    }
+    sleep(interval)
+    interval <- min(VALUES_RANKS_LONGEST_POLL_INTERVAL, interval * 1.5)
+  }
+}
+
+
 # Asks STRING for the state of a values/ranks job. The request is a POST, so that no cache
 # keeps a state (STRING sends max-age=86400) and the key is not part of a URL. Returns a
 # list with status (lower case, without a final "."), message and the addresses of a
@@ -2006,8 +2061,30 @@ report_left_out_rows <- function(prepared) {
 
 
 # How to get the results of several values/ranks jobs later: a call with their job ids, named by
-# their experiments.
+# their experiments. More than VALUES_RANKS_JOB_IDS_IN_MESSAGE job ids, which would make a long
+# message (about 32 KB for 1000 jobs), are saved in a file of the R session's temporary directory,
+# which the call reads.
 values_ranks_jobs_hint <- function(job_ids) {
+  if (length(job_ids) > VALUES_RANKS_JOB_IDS_IN_MESSAGE) {
+    job_ids_file <- tempfile("values_ranks_job_ids_", fileext = ".rds")
+    saved <- tryCatch(
+      {
+        saveRDS(job_ids, job_ids_file)
+        TRUE
+      },
+      error = function(e) FALSE,
+      warning = function(w) FALSE
+    )
+    if (saved) {
+      # forward slashes, so that the path can be pasted into R also on Windows
+      job_ids_path <- normalizePath(job_ids_file, winslash = "/")
+      return(paste(
+        "Their ", length(job_ids), " job ids are saved in ", job_ids_path, " until this R session ends: get their ",
+        "results later with string_db$get_values_ranks_results(readRDS(\"", job_ids_path, "\")).",
+        sep = ""
+      ))
+    }
+  }
   job_ids_text <- paste(deparse(unclass(job_ids), width.cutoff = 500L), collapse = "")
   return(paste("Get their results later with string_db$get_values_ranks_results(", job_ids_text, ").", sep = ""))
 }
