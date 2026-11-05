@@ -9,7 +9,7 @@ Description: The STRINGdb package provides an R interface to STRING, a
         protein-protein interaction database and functional enrichment
         analysis tool (https://string-db.org).
 License: GPL-2
-Depends: R (>= 2.14.0)
+Depends: R (>= 4.0.0)
 Imports: png, sqldf, plyr, igraph, httr, methods, RColorBrewer, gplots, hash, plotrix
 Suggests: RUnit, BiocGenerics
 biocViews: Network

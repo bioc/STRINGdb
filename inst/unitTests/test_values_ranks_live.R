@@ -1,8 +1,8 @@
 # Live test of STRING's values/ranks enrichment: a real job on STRING's queue, which can take
 # many minutes. It runs only when asked for, with STRINGDB_TEST_VALUES_RANKS=true and an API key in
-# STRINGDB_API_KEY (see get_api_key), so that a check on a computer that keeps its key in
-# ~/.Renviron does not submit a job. It is deactivated otherwise, e.g. on the Bioconductor
-# build machines, and when STRING cannot be reached (helper_live_string.R).
+# STRINGDB_API_KEY (see get_api_key), so that a check on a computer that has a key does not submit
+# a job, and that the test never requests or saves a key. It is deactivated otherwise, e.g. on the
+# Bioconductor build machines, and when STRING cannot be reached (helper_live_string.R).
 source(system.file("unitTests", "helper_live_string.R", package = "STRINGdb"), local = TRUE)
 
 

@@ -8,9 +8,18 @@
   and returns the enriched terms as a data frame, with the direction of each term (top, bottom or both
   ends of the ranked list) and the job's addresses on the STRING website. STRING's statistics differ
   from the GSEA of Subramanian et al. (e.g. fgsea or clusterProfiler); its help explains how.
-  `get_values_ranks_results()` gets the results of a job later, for example after a timeout, an
-  interrupt or in a new R session. `get_api_key()` requests the API key that these methods need, which
-  works at once; store it as `STRINGDB_API_KEY` in `~/.Renviron`.
+- Many experiments at once: with a table of values (one column for each experiment),
+  `get_values_ranks_enrichment()` submits one job for each experiment, which STRING runs side by side
+  on its servers, waits for all and returns a list of results. Up to 1000 jobs of an API key may wait
+  or run at once; the method submits the others as jobs finish. To submit without waiting,
+  `submit_values_ranks_enrichment()` returns the job identifiers at once, `get_values_ranks_status()`
+  shows the state of the jobs, and `get_values_ranks_results()` returns their results later, also in a
+  new R session. A job that fails does not stop the others, and when the timeout ends the wait, the
+  results so far are returned, with the job identifiers to get the rest later.
+- The values/ranks methods need a STRING API key, which the package requests the first time and keeps
+  on the computer (in `tools::R_user_dir("STRINGdb", "config")`); such a key works at once.
+  `STRINGDB_API_KEY`, when set, is used instead, e.g. to share one key across the nodes of a cluster.
+  `get_api_key()` shows the key of the computer, and `get_api_key(new = TRUE)` replaces it.
 - `get_enrichment(add_scores = TRUE)` adds STRING's strength and signal columns (STRING 12.5).
 - `get_enrichment_figure()` accepts the categories GWAS and Hallmark, the palette `"red_blue"` and
   `x_axis = "count"` (STRING 12.5). With an older version these values stop with an error instead of
@@ -34,6 +43,8 @@
 
 ## Other changes
 
+- The package needs R 4.0.0 or later (`Depends: R (>= 4.0.0)`), for `tools::R_user_dir()`, where it
+  keeps the API key.
 - `get_enrichment()` has a `caller_identity` argument, and `get_ppi_enrichment()`, `get_summary()`,
   `get_paralogs()` and `get_homologs_besthits()` now also send `caller_identity` to STRING.
 - Several methods have new arguments. A call that abbreviates an argument name may need the full name,

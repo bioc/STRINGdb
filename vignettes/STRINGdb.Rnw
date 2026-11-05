@@ -257,13 +257,9 @@ head(annotations, n=20)
 
 \section{GSEA (VALUES/RANKS ENRICHMENT)}
 
-STRING also offers a GSEA-like gene set enrichment analysis, which is computed on STRING's servers, not locally. The enrichment above tests a selected set of proteins, for example the hits of an experiment; this analysis, STRING's values/ranks enrichment ("Proteins with Values/Ranks" on the STRING website), tests a whole ranked experiment, without any cutoff. It finds the terms whose proteins gather at the top, at the bottom or at both ends of the list ranked by your values. Its statistics are STRING's own: a Kolmogorov-Smirnov test of the ranks of each term's proteins, an aggregate fold change test for small terms, and the Benjamini-Hochberg FDR within each category. Its scores and FDRs therefore differ from those of the GSEA of Subramanian et al., as computed for example by the fgsea and clusterProfiler packages. The analysis runs on STRING's servers, so the identifiers and values are sent to STRING. It needs an API key, which STRING gives without registration; a key requested by the package works at once. Request it once, and store it as \texttt{STRINGDB\_API\_KEY} in your \texttt{\textasciitilde/.Renviron} file:
+STRING also offers a GSEA-like gene set enrichment analysis, which is computed on STRING's servers, not locally. The enrichment above tests a selected set of proteins, for example the hits of an experiment; this analysis, STRING's values/ranks enrichment ("Proteins with Values/Ranks" on the STRING website), tests a whole ranked experiment, without any cutoff. It finds the terms whose proteins gather at the top, at the bottom or at both ends of the list ranked by your values. Its statistics are STRING's own: a Kolmogorov-Smirnov test of the ranks of each term's proteins, an aggregate fold change test for small terms, and the Benjamini-Hochberg FDR within each category. Its scores and FDRs therefore differ from those of the GSEA of Subramanian et al., as computed for example by the fgsea and clusterProfiler packages. The analysis runs on STRING's servers, so the identifiers and values are sent to STRING. It needs an API key, which STRING gives without registration: the package requests one the first time and keeps it on this computer, so nothing needs to be done (\texttt{string\_db\$get\_api\_key()} shows the key, for example to set it as \texttt{STRINGDB\_API\_KEY} on other computers).
 
-<<values_ranks_api_key, eval=FALSE>>=
-string_db$get_api_key()
-@
-
-Then submit all mapped proteins with their values with \texttt{get\_values\_ranks\_enrichment}. The method submits a job to STRING's queue, waits for it and returns a data frame of the enriched terms:
+Submit all mapped proteins with their values with \texttt{get\_values\_ranks\_enrichment}. The method submits a job to STRING's queue, waits for it and returns a data frame of the enriched terms:
 
 <<values_ranks, eval=FALSE>>=
 ranked_enrichment <- string_db$get_values_ranks_enrichment( example1_mapped$STRING_id,
@@ -277,6 +273,23 @@ With the default \texttt{rank\_direction="descending"}, rank 1 is the largest va
 
 <<values_ranks_results, eval=FALSE>>=
 ranked_enrichment <- string_db$get_values_ranks_results( "the job identifier" )
+@
+
+Many experiments can run at once, for example one for each contrast or sample: give a table of values, with one column for each experiment. Each experiment becomes a job, and STRING runs the jobs side by side on its servers; up to 1000 jobs of an API key may wait or run at once, and the method submits the others as jobs finish. It waits for all jobs and returns a list of results, named by experiment:
+
+<<values_ranks_several, eval=FALSE>>=
+rankings <- data.frame(logFC = example1_mapped$logFC,
+                       signed_p = sign(example1_mapped$logFC) * -log10(example1_mapped$pvalue))
+ranked_enrichments <- string_db$get_values_ranks_enrichment( example1_mapped$STRING_id, rankings )
+names(ranked_enrichments)
+@
+
+To submit without waiting, for example many experiments whose results are collected later, or in another R session, \texttt{submit\_values\_ranks\_enrichment} returns the job identifiers at once; \texttt{get\_values\_ranks\_status} shows the state of the jobs, and \texttt{get\_values\_ranks\_results} waits for them and returns their results:
+
+<<values_ranks_asynchronous, eval=FALSE>>=
+job_ids <- string_db$submit_values_ranks_enrichment( example1_mapped$STRING_id, rankings )
+string_db$get_values_ranks_status( job_ids )
+ranked_enrichments <- string_db$get_values_ranks_results( job_ids )
 @
 
 

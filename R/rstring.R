@@ -547,35 +547,79 @@ Author(s):
     ## get_api_key
     #########################################
 
-    get_api_key = function(caller_identity = "STRINGdb-package") {
+    get_api_key = function(caller_identity = "STRINGdb-package", new = FALSE) {
       '
 Description:
-  Requests an API key from STRING for its values/ranks enrichment (get_values_ranks_enrichment), a
-  GSEA-like enrichment analysis computed on STRING\'s servers, not locally. STRING gives the key
-  without registration; a key requested with the default caller_identity works at once. Please request
-  a key only once and keep it: store it as STRINGDB_API_KEY in your ~/.Renviron file, where
-  get_values_ranks_enrichment finds it.
+  Returns the STRING API key that the values/ranks methods (get_values_ranks_enrichment, a GSEA-like
+  enrichment analysis computed on STRING\'s servers, not locally) use on this computer: the
+  environment variable STRINGDB_API_KEY when it is set, otherwise the key that the package saved on
+  this computer, otherwise a new key from STRING, which it saves. STRING gives the key without
+  registration; a key requested with the default caller_identity works at once. The values/ranks
+  methods get the key in the same way, so calling get_api_key is needed only to see the key, e.g.
+  to use it on other computers as STRINGDB_API_KEY.
 
 Input parameters:
   "caller_identity"   caller identifier sent to STRING.
+  "new"               TRUE requests a new key from STRING and saves it in place of the saved key
+                      (default FALSE). STRING keeps each job for the key that submitted it, so the
+                      jobs of the earlier key are no longer read with the new one.
 
 Author(s):
    Damian Szklarczyk
 '
 
+      if (!(is.logical(new) && length(new) == 1 && !is.na(new))) {
+        stop("ERROR: new should be TRUE or FALSE.", call. = FALSE)
+      }
+      key_file <- values_ranks_key_file()
+      environment_key <- trimws(Sys.getenv("STRINGDB_API_KEY"))
+
+      if (!new) {
+        if (nchar(environment_key) > 0) {
+          message("The STRING API key in the environment variable STRINGDB_API_KEY: ", environment_key)
+          return(invisible(environment_key))
+        }
+        saved_key <- read_saved_api_key(key_file)
+        if (nchar(saved_key) > 0) {
+          message("The STRING API key of this computer, saved in ", key_file, ": ", saved_key)
+          return(invisible(saved_key))
+        }
+      }
+
+      # the key that new = TRUE replaces is shown, as its jobs are read only with it
+      previous_key <- read_saved_api_key(key_file)
       key <- request_string_api_key(stable_url, caller_identity)
+
+      # without new, a key that another R session saved meanwhile is kept, and used
+      saved_key <- save_api_key(key$api_key, key_file, replace = new)
+      if (!new && nchar(saved_key) > 0 && saved_key != key$api_key) {
+        message("The STRING API key of this computer, saved in ", key_file, " by another R session: ", saved_key)
+        return(invisible(saved_key))
+      }
 
       note <- ""
       if (nchar(key$note) > 0) {
-        note <- paste(key$note, "\n", sep = "")
+        note <- paste(" ", key$note, sep = "")
       }
-      message(
-        "Your STRING API key: ", key$api_key, "\n", note,
-        "Keep it, so that get_values_ranks_enrichment() finds it: add the line\n",
-        "  STRINGDB_API_KEY=", key$api_key, "\n",
-        "to your ~/.Renviron file (e.g. with usethis::edit_r_environ()) and restart R.\n",
-        "Please request a key only once."
-      )
+      saved <- saved_key == key$api_key
+      if (saved) {
+        where <- paste(" It is saved in ", key_file, " and used for all values/ranks jobs on this computer.", sep = "")
+      } else {
+        where <- paste(
+          " It could not be saved in ", key_file, "; to keep it, set STRINGDB_API_KEY=", key$api_key,
+          " in your ~/.Renviron file.",
+          sep = ""
+        )
+      }
+      replaced_note <- ""
+      if (saved && new && nchar(previous_key) > 0 && previous_key != key$api_key) {
+        replaced_note <- paste(" It replaces the key ", previous_key, ", whose jobs are read only with that key.", sep = "")
+      }
+      environment_note <- ""
+      if (nchar(environment_key) > 0) {
+        environment_note <- " The environment variable STRINGDB_API_KEY is set, and its key is used instead."
+      }
+      message("Your new STRING API key: ", key$api_key, ".", note, where, replaced_note, environment_note)
       return(invisible(key$api_key))
     },
 
@@ -584,7 +628,7 @@ Author(s):
     #########################################
 
     get_values_ranks_enrichment = function(string_ids, values, max_fdr = 0.01, rank_direction = "descending",
-                                           timeout = 7200, api_key = Sys.getenv("STRINGDB_API_KEY"), quiet = FALSE,
+                                           timeout = 7200, api_key = NULL, quiet = FALSE,
                                            caller_identity = "STRINGdb-package") {
       '
 Description:
@@ -597,23 +641,33 @@ Description:
   small terms also with an aggregate fold change test, with the Benjamini-Hochberg FDR within each
   category; these statistics differ from the GSEA of Subramanian et al. (e.g. fgsea or
   clusterProfiler), so the scores and FDRs of the two cannot be compared.
-  Returns a data frame with STRING\'s columns (category, termID, termDescription, genesMapped,
-  genesInSet, enrichmentScore, direction, falseDiscoveryRate, method, proteinIDs, proteinLabels,
-  proteinInputLabels, proteinInputValues, proteinRanks) and the attributes job_id, page_url,
-  graph_url, download_url and string_version. If the wait ends (timeout or interrupt), the job keeps
-  running on STRING: get its results later with get_values_ranks_results(job_id).
+  Several experiments run at once: give a table of values, with one column for each experiment. The
+  method submits one job for each, which STRING runs side by side (up to 1000 jobs of an API key
+  wait or run at once; the others are submitted as jobs finish), and returns all results. To submit
+  without waiting, use submit_values_ranks_enrichment.
+  Returns, for a vector of values, a data frame with STRING\'s columns (category, termID,
+  termDescription, genesMapped, genesInSet, enrichmentScore, direction, falseDiscoveryRate, method,
+  proteinIDs, proteinLabels, proteinInputLabels, proteinInputValues, proteinRanks) and the attributes
+  job_id, page_url, graph_url, download_url and string_version; for a table, a list of such data
+  frames named by experiment, with the job ids as the attribute job_ids (NULL for an experiment
+  that failed, with a warning). If the wait ends early, the jobs keep running on STRING: get their
+  results later with get_values_ranks_results. For a table, the timeout returns the results so far,
+  with NULL for the unfinished and unsubmitted experiments (the attribute not_submitted)
+  and a warning; an interrupt or a lost connection ends with an error that lists the job ids.
 
 Input parameters:
   "string_ids"      vector of STRING identifiers (e.g. the STRING_id column of map()), one per value.
                       Rows without an identifier or without a finite value are left out, and an
                       identifier given more than once keeps its value farthest from 0.
-  "values"          numeric vector of the values to rank, e.g. log fold changes or t statistics.
+  "values"          the values to rank, e.g. log fold changes or t statistics: a numeric vector, or
+                      a matrix or data frame with one numeric column for each experiment and one row
+                      for each identifier.
   "max_fdr"         FDR cutoff of the reported terms (above 0, at most 0.25; default 0.01).
   "rank_direction"  "descending" (default: rank 1 is the largest value, and "top" the end of the
                       largest values) or "ascending" (rank 1 is the smallest value). It only names the
                       ends of the ranked list and numbers the ranks; the enrichment is the same.
-  "timeout"         seconds to wait for the job (default 7200).
-  "api_key"         STRING API key (default: the environment variable STRINGDB_API_KEY); see get_api_key.
+  "timeout"         seconds to wait for the jobs (default 7200).
+  "api_key"         STRING API key (default NULL: the key of this computer, see get_api_key).
   "quiet"           TRUE to print no progress messages.
   "caller_identity" caller identifier sent to STRING.
 
@@ -622,49 +676,151 @@ Author(s):
 '
 
       options <- normalize_values_ranks_options(max_fdr, rank_direction)
-      if (!(is.numeric(timeout) && length(timeout) == 1 && !is.na(timeout) && timeout > 0)) {
-        stop("ERROR: timeout should be a positive number of seconds.", call. = FALSE)
-      }
-      api_key <- resolve_values_ranks_api_key(api_key)
-
-      input <- prepare_values_ranks_input(string_ids, values)
+      check_values_ranks_timeout(timeout)
+      prepared <- prepare_values_ranks_experiments(string_ids, values)
       if (!quiet) {
-        if (input$n_missing > 0) {
-          message("Left out ", input$n_missing, " rows without an identifier or without a finite value.")
+        report_left_out_rows(prepared)
+      }
+      key_info <- resolve_values_ranks_api_key(api_key, stable_url, request_new = TRUE, quiet = quiet)
+
+      if (!prepared$several) {
+        input <- prepared$experiments[[1]]
+        submission <- submit_first_values_ranks_job(stable_url, species, input$text, key_info, options, caller_identity, quiet)
+        if (!quiet) {
+          message("Submitted ", input$n_submitted, " proteins to STRING's values/ranks enrichment (job ", submission$job_id, ").")
         }
-        if (input$n_duplicates > 0) {
-          message("Left out ", input$n_duplicates, " repeated identifiers (each keeps its value farthest from 0).")
-        }
+        return(collect_values_ranks_results(stable_url, submission$key_info$key, submission$job_id, timeout, quiet, caller_identity))
       }
 
-      job_id <- submit_values_ranks_job(stable_url, species, input$text, api_key, options, caller_identity)
+      run <- run_values_ranks_jobs(
+        stable_url, species, prepared$experiments, key_info, options,
+        timeout_seconds = timeout, quiet = quiet, caller_identity = caller_identity
+      )
+      return(values_ranks_results_list(run, names(prepared$experiments)))
+    },
+
+    #########################################
+    ## submit_values_ranks_enrichment
+    #########################################
+
+    submit_values_ranks_enrichment = function(string_ids, values, max_fdr = 0.01, rank_direction = "descending",
+                                              api_key = NULL, quiet = FALSE, caller_identity = "STRINGdb-package") {
+      '
+Description:
+  Submits STRING\'s values/ranks enrichment (the GSEA-like analysis of get_values_ranks_enrichment,
+  computed on STRING\'s servers, not locally) without waiting: one job for each experiment, which
+  STRING\'s queue runs side by side. Returns the job ids at once; get the results later with
+  get_values_ranks_results(job_ids), also in a new R session on this computer, and see their
+  progress with get_values_ranks_status(job_ids). Up to 1000 jobs of an API key may wait or run at
+  once: experiments beyond STRING\'s limit are not submitted, with a warning, and named by the
+  attribute not_submitted of the job ids (their column numbers, named by experiment); submit them
+  again once jobs have finished, with values[, not_submitted, drop = FALSE].
+  Returns, for a vector of values, the job id; for a table, the job ids named by experiment.
+
+Input parameters:
+  "string_ids", "values", "max_fdr", "rank_direction", "api_key", "quiet", "caller_identity"
+                    as for get_values_ranks_enrichment.
+
+Author(s):
+   Damian Szklarczyk
+'
+
+      options <- normalize_values_ranks_options(max_fdr, rank_direction)
+      prepared <- prepare_values_ranks_experiments(string_ids, values)
       if (!quiet) {
-        message("Submitted ", input$n_submitted, " proteins to STRING's values/ranks enrichment (job ", job_id, ").")
+        report_left_out_rows(prepared)
+      }
+      key_info <- resolve_values_ranks_api_key(api_key, stable_url, request_new = TRUE, quiet = quiet)
+
+      if (!prepared$several) {
+        input <- prepared$experiments[[1]]
+        submission <- submit_first_values_ranks_job(stable_url, species, input$text, key_info, options, caller_identity, quiet)
+        if (!quiet) {
+          message(
+            "Submitted ", input$n_submitted, " proteins to STRING's values/ranks enrichment (job ", submission$job_id, "). ",
+            values_ranks_resume_hint(submission$job_id)
+          )
+        }
+        return(submission$job_id)
       }
 
-      return(collect_values_ranks_results(stable_url, api_key, job_id, timeout, quiet, caller_identity))
+      run <- run_values_ranks_jobs(
+        stable_url, species, prepared$experiments, key_info, options,
+        wait = FALSE, quiet = quiet, caller_identity = caller_identity
+      )
+
+      if (length(run$job_ids) == 0) {
+        stop("ERROR: STRING took none of the values/ranks jobs: ", run$held_back, call. = FALSE)
+      }
+      job_ids <- run$job_ids
+      if (length(run$pending) > 0) {
+        # the experiments that STRING could not take now, for a later submission: their column numbers
+        attr(job_ids, "not_submitted") <- values_ranks_not_submitted(run$pending)
+        warning(
+          length(run$pending), " of ", length(prepared$experiments), " experiments were not submitted: ", run$held_back,
+          " Their column numbers, named by experiment, are the attribute not_submitted of the job ids: submit ",
+          "them again once jobs have finished, with values[, not_submitted, drop = FALSE] (up to 1000 jobs of an ",
+          "API key may wait or run at once).",
+          call. = FALSE
+        )
+      }
+      if (length(run$failed) > 0) {
+        warning(values_ranks_experiments_warning("experiments were refused by STRING", run$failed), call. = FALSE)
+      }
+      return(job_ids)
+    },
+
+    #########################################
+    ## get_values_ranks_status
+    #########################################
+
+    get_values_ranks_status = function(job_ids, api_key = NULL, caller_identity = "STRINGdb-package") {
+      '
+Description:
+  The state of values/ranks jobs (STRING\'s GSEA-like enrichment, computed on STRING\'s servers),
+  from one request to STRING, without waiting. Returns a data frame with the columns experiment (the
+  name of the job, NA without names), job_id, status (STRING\'s state, e.g. "submitted", "running",
+  "success" or "error"; "unknown" for a job that STRING does not list for the key), message and
+  creation_time.
+
+Input parameters:
+  "job_ids"         the job ids, e.g. what submit_values_ranks_enrichment returns.
+  "api_key"         the STRING API key that submitted the jobs (default NULL: the key of this
+                      computer, see get_api_key). STRING keeps each job for the key that submitted it.
+  "caller_identity" caller identifier sent to STRING.
+
+Author(s):
+   Damian Szklarczyk
+'
+
+      job_ids <- check_values_ranks_job_ids(job_ids)
+      key_info <- resolve_values_ranks_api_key(api_key, stable_url, request_new = FALSE)
+      states <- get_values_ranks_jobs_states(stable_url, key_info$key, caller_identity)
+      return(values_ranks_status_table(job_ids, states))
     },
 
     #########################################
     ## get_values_ranks_results
     #########################################
 
-    get_values_ranks_results = function(job_id, timeout = 7200, api_key = Sys.getenv("STRINGDB_API_KEY"),
-                                        quiet = FALSE, caller_identity = "STRINGdb-package") {
+    get_values_ranks_results = function(job_ids, timeout = 7200, api_key = NULL, quiet = FALSE,
+                                        caller_identity = "STRINGdb-package") {
       '
 Description:
-  Returns the results of a values/ranks job (STRING\'s GSEA-like enrichment, computed on STRING\'s
-  servers) submitted with get_values_ranks_enrichment
-  (see there), waiting for the job if it is not finished yet, e.g. after the wait of
-  get_values_ranks_enrichment timed out or was interrupted, or in a new R session. STRING keeps the
-  results for a limited time.
+  Returns the results of values/ranks jobs (STRING\'s GSEA-like enrichment, computed on STRING\'s
+  servers) submitted with submit_values_ranks_enrichment or get_values_ranks_enrichment, waiting for
+  the jobs that have not finished yet, e.g. after the wait of get_values_ranks_enrichment timed out
+  or was interrupted, or in a new R session. STRING keeps the results for a limited time.
+  Returns, for one job id without a name, a data frame as get_values_ranks_enrichment; for several
+  job ids, or named ones, a list of data frames named by job (NULL for a job that failed, or that
+  did not finish before the timeout, with a warning).
 
 Input parameters:
-  "job_id"          the job identifier (the job_id attribute of the results of
-                      get_values_ranks_enrichment, or its messages).
-  "timeout"         seconds to wait for the job (default 7200).
-  "api_key"         the STRING API key that submitted the job (default: the environment variable
-                      STRINGDB_API_KEY). STRING keeps each job for the key that submitted it.
+  "job_ids"         one or more job ids: what submit_values_ranks_enrichment returns, the job_id
+                      attribute of the results of get_values_ranks_enrichment, or those in its messages.
+  "timeout"         seconds to wait for the jobs (default 7200).
+  "api_key"         the STRING API key that submitted the jobs (default NULL: the key of this
+                      computer, see get_api_key). STRING keeps each job for the key that submitted it.
   "quiet"           TRUE to print no progress messages.
   "caller_identity" caller identifier sent to STRING.
 
@@ -672,15 +828,22 @@ Author(s):
    Damian Szklarczyk
 '
 
-      if (!(is.character(job_id) && length(job_id) == 1 && !is.na(job_id) && nchar(trimws(job_id)) > 0)) {
-        stop("ERROR: job_id should be one job identifier.", call. = FALSE)
-      }
-      if (!(is.numeric(timeout) && length(timeout) == 1 && !is.na(timeout) && timeout > 0)) {
-        stop("ERROR: timeout should be a positive number of seconds.", call. = FALSE)
-      }
-      api_key <- resolve_values_ranks_api_key(api_key)
+      job_ids <- check_values_ranks_job_ids(job_ids)
+      check_values_ranks_timeout(timeout)
+      key_info <- resolve_values_ranks_api_key(api_key, stable_url, request_new = FALSE)
 
-      return(collect_values_ranks_results(stable_url, api_key, trimws(job_id), timeout, quiet, caller_identity))
+      if (length(job_ids) == 1 && is.null(names(job_ids))) {
+        return(collect_values_ranks_results(stable_url, key_info$key, job_ids, timeout, quiet, caller_identity))
+      }
+
+      if (is.null(names(job_ids))) {
+        names(job_ids) <- make.unique(job_ids)
+      }
+      run <- run_values_ranks_jobs(
+        stable_url, species, list(), key_info, job_ids = job_ids,
+        timeout_seconds = timeout, quiet = quiet, caller_identity = caller_identity, job_ids_known = TRUE
+      )
+      return(values_ranks_results_list(run, names(job_ids), what = "jobs"))
     },
 
     #########################################
