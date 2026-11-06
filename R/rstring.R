@@ -556,7 +556,8 @@ Description:
     1. the environment variable STRINGDB_API_KEY, if it is set;
     2. the key saved on this computer;
     3. a new key, which the method requests from STRING and saves.
-  You need this method only to see the key.
+  You need this method only to see the key. Keep the key private: anyone with it can list your
+  jobs and read their results.
 
 Author(s):
    Damian Szklarczyk
@@ -615,9 +616,10 @@ Author(s):
       '
 Description:
   A GSEA-like enrichment analysis of a ranked list of proteins. It is STRING\'s "Proteins with
-  Values/Ranks" analysis, computed on STRING\'s servers, not locally.
-  Each term is tested with a Kolmogorov-Smirnov (KS) test. Small terms are tested with the more
-  sensitive aggregate fold change (AFC) test.
+  Values/Ranks" analysis, computed on STRING\'s servers, not locally. Give all the proteins measured
+  in the experiment, without a cutoff: the submitted list is the background of the test.
+  STRING tests larger terms, and terms with a clear signal, with a Kolmogorov-Smirnov (KS) test, and
+  the other terms with the more sensitive, but slower, aggregate fold change (AFC) test.
   The method reports terms enriched at the top or at the bottom of the list. It also reports terms
   enriched at both ends: terms whose proteins are partly up- and partly down-regulated.
   The method waits until STRING has finished. Then it returns the results as a data frame.
@@ -627,7 +629,8 @@ Description:
 
 Input parameters:
   "string_ids"      STRING identifiers, one per value, e.g. the STRING_id column of map().
-  "values"          the values to rank, e.g. log fold changes. A vector, or a table with one column
+  "values"          the values to rank, for all the proteins measured: signed values such as log fold
+                      changes or t statistics, not p-values. A vector, or a table with one column
                       per experiment. A vector named by STRING identifiers can be given alone.
   "max_fdr"         FDR cutoff of the reported terms. Default 0.05, at most 0.25.
   "rank_direction"  "descending" (default) or "ascending". It only names the ends of the list.
@@ -635,10 +638,10 @@ Input parameters:
   "quiet"           TRUE to print no progress messages.
 
 Output:
-  A data frame with one row per enriched term. The columns:
-    category, term, number_of_genes, number_of_genes_in_background,
-    inputGenes, preferredNames: the term\'s proteins, as in get_enrichment,
-    enrichment_score: from 0 to 10,
+  A data frame with one row per enriched term, ordered by category, then by FDR. The columns:
+    category, term, number_of_genes, number_of_genes_in_background (for information only),
+    inputGenes, preferredNames: all the term\'s proteins in the input (not a leading edge),
+    enrichment_score: from 0 (the mean of all values) to 10 (the most extreme value), without sign,
     direction: "top", "bottom" or "both ends",
     method: "ks" or "afc",
     fdr, description,
@@ -695,7 +698,8 @@ Author(s):
 Description:
   Submits STRING\'s values/ranks enrichment and returns at once. The R session is not blocked while
   STRING computes. This suits many experiments, e.g. tens or hundreds of columns.
-  Get the results later with get_values_ranks_results.
+  Get the results later with get_values_ranks_results. Keep the job ids, e.g. with
+  saveRDS(job_ids, "jobs.rds"), to get the results in another R session.
   Returns the job id for a vector of values, or the job ids named by experiment for a table.
   STRING runs up to 1000 jobs per API key. Experiments beyond that are not submitted. The
   attribute not_submitted lists them.

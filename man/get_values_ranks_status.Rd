@@ -27,7 +27,7 @@ A data frame with one row per job and these columns:
 }
 }
 \seealso{
-\code{submit_values_ranks_enrichment}, \code{get_values_ranks_results}
+\code{\link{submit_values_ranks_enrichment}}, \code{\link{get_values_ranks_results}}
 }
 \concept{GSEA}
 \examples{

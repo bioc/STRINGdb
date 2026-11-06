@@ -25,6 +25,8 @@ the time to wait for each job, in seconds. Default 7200.
 }
 \details{
 STRING keeps the results of a job for a limited time. After that, submit the job again.
+
+In another R session, give the job identifiers that \code{submit_values_ranks_enrichment} returned, e.g. \code{readRDS("jobs.rds")}: their names give the experiments, and the results are named by them.
 }
 \value{
 The results have the same form as from \code{get_values_ranks_enrichment}:
@@ -34,7 +36,7 @@ The results have the same form as from \code{get_values_ranks_enrichment}:
 }
 }
 \seealso{
-\code{submit_values_ranks_enrichment}, \code{get_values_ranks_status}, \code{get_values_ranks_enrichment}
+\code{\link{submit_values_ranks_enrichment}}, \code{\link{get_values_ranks_status}}, \code{\link{get_values_ranks_enrichment}}
 }
 \concept{GSEA}
 \examples{

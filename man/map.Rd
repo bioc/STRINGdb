@@ -1,5 +1,6 @@
 \name{map}
 \alias{\S4method{map}{STRINGdb}}
+\alias{map}
 \title{
 map
 }

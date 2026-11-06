@@ -22,6 +22,7 @@ The values/ranks methods find the key in the same way. You need \code{get_api_ke
 
 To use the key on other computers, e.g. a cluster, set \code{STRINGDB_API_KEY} there.
 To read the jobs of another key, set it in the R session: \code{Sys.setenv(STRINGDB_API_KEY = "...")}.
+Keep the key private: anyone with it can list your jobs and read their results.
 
 A key requested by the package works at once. Other new keys can take up to 15 minutes to be activated.
 }
@@ -29,7 +30,7 @@ A key requested by the package works at once. Other new keys can take up to 15 m
 The API key (invisibly). A message shows the key and where it comes from.
 }
 \seealso{
-\code{get_values_ranks_enrichment}, \code{submit_values_ranks_enrichment}
+\code{\link{get_values_ranks_enrichment}}, \code{\link{submit_values_ranks_enrichment}}
 }
 \examples{
 if (interactive()) {

@@ -33,14 +33,16 @@ the FDR cutoff of the reported terms. Default 0.05, at most 0.25.
 Each experiment becomes a job. STRING runs up to 1000 jobs per API key at once.
 Experiments beyond this limit are not submitted, with a warning. Submit them later with \code{values[, attr(job_ids, "not_submitted"), drop = FALSE]}.
 For a vector of values, a refusal by STRING is an error.
-The method needs STRING version 12.0 or later. It uses the API key of this computer (see \code{get_api_key}).
+The method needs STRING version 12.0 or later. It uses the API key of this computer (see \code{\link{get_api_key}}).
+
+Keep the job identifiers, e.g. with \code{saveRDS(job_ids, "jobs.rds")}, to get the results in another R session: their names give the experiments.
 }
 \value{
 For a vector of values: the job identifier. For a table: the job identifiers, named by experiment.
 The attribute \code{not_submitted} gives the columns of the experiments that were not submitted, if any.
 }
 \seealso{
-\code{get_values_ranks_status}, \code{get_values_ranks_results}, \code{get_values_ranks_enrichment}, \code{get_api_key}
+\code{\link{get_values_ranks_status}}, \code{\link{get_values_ranks_results}}, \code{\link{get_values_ranks_enrichment}}, \code{\link{get_api_key}}
 }
 \concept{GSEA}
 \examples{
