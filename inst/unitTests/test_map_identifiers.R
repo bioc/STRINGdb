@@ -71,6 +71,23 @@ test_map_column_order <- function() {
 }
 
 
+test_map_matrix_input <- function() {
+
+  # A matrix is mapped as a data frame, as in STRINGdb 2.24 and earlier.
+  aliases <- STRINGdb:::prioritize_aliases_by_source(mapping_alias_table())
+  input <- cbind(gene = c("tp53", "unknown1", "MDM2"), logFC = c("1.5", "-2", "0.1"))
+
+  mapped <- STRINGdb:::multi_map_df(input, aliases, "gene", "alias", "STRING_id")
+
+  checkTrue(is.data.frame(mapped))
+  checkEquals(c("gene", "logFC", "STRING_id"), colnames(mapped))
+  checkEquals(c("tp53", "unknown1", "MDM2"), mapped$gene)
+  checkEquals(c("1.5", "-2", "0.1"), mapped$logFC)
+  checkEquals(c("9606.ENSP00000269305", NA, "9606.ENSP00000258149"), mapped$STRING_id)
+
+}
+
+
 test_map_methods_offline <- function() {
 
   string_db <- STRINGdb$new(version = "12.5", species = 9606, score_threshold = 400)

@@ -175,6 +175,8 @@ test_values_ranks_wait <- function() {
     error = function(e) conditionMessage(e))
   checkTrue(grepl("did not finish within 60 seconds", error_message, fixed = TRUE))
   checkTrue(grepl("get_values_ranks_results(\"job123\")", error_message, fixed = TRUE))
+  checkTrue(grepl("servers may be busy", error_message, fixed = TRUE))
+  checkTrue(grepl("please contact STRING support", error_message, fixed = TRUE))
 
   # a failed status request is tried again; five in a row give up
   waits <- fake_waits()
@@ -484,9 +486,6 @@ test_values_ranks_method_checks <- function() {
     )
     checkTrue(grepl("one row for each identifier", error_message, fixed = TRUE))
   })
-
-  error_message <- tryCatch(string_db$get_api_key(new = NA), error = function(e) conditionMessage(e))
-  checkTrue(grepl("new should be TRUE or FALSE", error_message, fixed = TRUE))
 
 }
 
@@ -950,7 +949,7 @@ test_values_ranks_run_jobs <- function() {
   checkTrue(is.null(results$B))
   checkTrue(is.data.frame(results$C))
   checkEquals(run$job_ids, attr(results, "job_ids"))
-  checkTrue(grepl("1 values/ranks experiments failed: B:", warned, fixed = TRUE))
+  checkTrue(grepl("1 values/ranks experiment failed: B:", warned, fixed = TRUE))
   checkEquals(c(A = "success", B = "failed", C = "success"), attr(results, "status"))
 
   # a refusal of the first submission (e.g. a wrong key) stops before any job is submitted
@@ -998,8 +997,11 @@ test_values_ranks_run_jobs_timeout <- function() {
   checkEquals(c(A = "success", B = "unfinished", C = "not submitted"), attr(results, "status"))
   checkEquals(2, length(warned))
   checkTrue(grepl("1 of 2 values/ranks jobs did not finish", warned[1], fixed = TRUE))
-  checkTrue(grepl("within 5 seconds", warned[1], fixed = TRUE))
-  checkTrue(grepl("1 experiments were not submitted", warned[2], fixed = TRUE))
+  checkTrue(grepl("within 5 seconds each", warned[1], fixed = TRUE))
+  checkTrue(grepl("please contact STRING support", warned[1], fixed = TRUE))
+  checkTrue(grepl("Not submitted: 1 of 3 experiments.", warned[2], fixed = TRUE))
+  checkTrue(grepl("because this API key already has its maximum of 1000 jobs", warned[2], fixed = TRUE))
+  checkTrue(!grepl("contact STRING support", warned[2], fixed = TRUE))
   checkTrue(all(nchar(warned) < 1000))
 
   # nothing submitted when the timeout ends the wait: no warning about unfinished jobs
@@ -1018,7 +1020,35 @@ test_values_ranks_run_jobs_timeout <- function() {
     }
   )
   checkEquals(1, length(warned))
-  checkTrue(grepl("3 experiments were not submitted", warned, fixed = TRUE))
+  checkTrue(grepl("Not submitted: 3 of 3 experiments.", warned, fixed = TRUE))
+  checkTrue(grepl("did not take them within 5 seconds, because this API key already has its maximum", warned, fixed = TRUE))
+  checkTrue(grepl("Submit again once some of your jobs have finished.", warned, fixed = TRUE))
+  checkTrue(!grepl("contact STRING support", warned, fixed = TRUE))
+
+  # a full STRING queue: STRING may be busy, so the warning says to try later and gives the support
+  queue_full <- function(url_str, params, timeout_seconds = 60) {
+    if (grepl("submit", url_str, fixed = TRUE)) {
+      return(list(list(job_id = "", status = "error", message = "Too many jobs (> 10000) in the STRING queue")))
+    }
+    return(list())
+  }
+  waits <- fake_waits()
+  run <- STRINGdb:::run_values_ranks_jobs(
+    "https://s", 9606, three_experiments()$experiments, list(key = "key1", source = "environment"), options,
+    timeout_seconds = 5, quiet = TRUE, send = queue_full, fetch = fake_download(), sleep = waits$sleep, clock = waits$clock
+  )
+  warned <- character(0)
+  withCallingHandlers(
+    STRINGdb:::values_ranks_results_list(run, c("A", "B", "C")),
+    warning = function(w) {
+      warned <<- c(warned, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  checkEquals(1, length(warned))
+  checkTrue(grepl("STRING's answer: Too many jobs (> 10000) in the STRING queue.", warned, fixed = TRUE))
+  checkTrue(grepl("please try again later", warned, fixed = TRUE))
+  checkTrue(grepl("please contact STRING support", warned, fixed = TRUE))
   checkEquals(c(A = 1L, B = 2L, C = 3L), attr(results, "not_submitted"))
   checkEquals(c(A = "not submitted", B = "not submitted", C = "not submitted"), attr(results, "status"))
 
@@ -1376,7 +1406,7 @@ test_values_ranks_methods_several <- function() {
     checkEquals("up", names(job_ids))
     checkEquals("job1", job_ids[["up"]])
     checkEquals(c(down = 2L), attr(job_ids, "not_submitted"))
-    checkTrue(grepl("1 of 2 experiments were not submitted: Job submission limit reached", warned, fixed = TRUE))
+    checkTrue(grepl("Not submitted: 1 of 2 experiments. STRING did not take them now, because this API key already has", warned, fixed = TRUE))
     checkTrue(nchar(warned) < 1000)
     # the job ids, with that attribute, are read as before, and the recipe gives the values left
     checkEquals(1, nrow(string_db$get_values_ranks_status(job_ids)))
@@ -1413,7 +1443,7 @@ test_values_ranks_small_fixes <- function() {
   checkTrue(nchar(text) < 1000)
   checkTrue(grepl("; and 9 more$", text))
 
-  # get_api_key(new = TRUE) that cannot save the new key says so, and returns the new key
+  # get_api_key that cannot save the new key says so, and returns the new key
   log <- new.env()
   log$count <- 0
   keys <- function(url_str, params, timeout_seconds = 60) {
@@ -1428,19 +1458,17 @@ test_values_ranks_small_fixes <- function() {
 
   with_temporary_key_file({
     key_file <- STRINGdb:::values_ranks_key_file()
-    suppressMessages(string_db$get_api_key())
-    # the key file is replaced by a directory, so that no key can be written there
-    unlink(key_file)
-    dir.create(key_file)
+    # a directory in place of the key file, so that no key can be written there
+    dir.create(key_file, recursive = TRUE)
     shown <- character(0)
     key <- withCallingHandlers(
-      string_db$get_api_key(new = TRUE),
+      string_db$get_api_key(),
       message = function(m) {
         shown <<- c(shown, conditionMessage(m))
         invokeRestart("muffleMessage")
       }
     )
-    checkEquals("key2", key)
+    checkEquals("key1", key)
     checkTrue(grepl("could not be saved", shown, fixed = TRUE))
   })
 
@@ -1449,8 +1477,7 @@ test_values_ranks_small_fixes <- function() {
 
 test_values_ranks_get_api_key <- function() {
 
-  # get_api_key requests a key only when this computer has none, keeps it, and new = TRUE replaces it
-  # (showing the key it replaces)
+  # get_api_key requests a key only when this computer has none, and keeps it
   log <- new.env()
   log$count <- 0
   keys <- function(url_str, params, timeout_seconds = 60) {
@@ -1475,14 +1502,12 @@ test_values_ranks_get_api_key <- function() {
     checkEquals("key1", keep_messages(string_db$get_api_key()))
     checkEquals("key1", keep_messages(string_db$get_api_key()))
     checkEquals(1, log$count)
-    checkEquals("key2", keep_messages(string_db$get_api_key(new = TRUE)))
-    checkTrue(grepl("It replaces the key key1", shown[3], fixed = TRUE))
-    checkEquals("key2", STRINGdb:::read_saved_api_key(STRINGdb:::values_ranks_key_file()))
+    checkEquals("key1", STRINGdb:::read_saved_api_key(STRINGdb:::values_ranks_key_file()))
 
     # STRINGDB_API_KEY comes first, without a request
     Sys.setenv(STRINGDB_API_KEY = "envkey")
     checkEquals("envkey", keep_messages(string_db$get_api_key()))
-    checkEquals(2, log$count)
+    checkEquals(1, log$count)
   })
 
 }
@@ -1530,7 +1555,24 @@ test_values_ranks_single_waits_and_long_hint <- function() {
                                                      send = always_full, sleep = waits$sleep, clock = waits$clock),
     error = function(e) conditionMessage(e)
   )
-  checkTrue(grepl("did not take the values/ranks job within 10 seconds: Too many jobs", error_message, fixed = TRUE))
+  checkTrue(grepl("did not take the values/ranks job within 10 seconds. STRING's answer: Too many jobs", error_message, fixed = TRUE))
+  checkTrue(grepl("please try again later", error_message, fixed = TRUE))
+  checkTrue(grepl("please contact STRING support", error_message, fixed = TRUE))
+
+  # the key's own limit of jobs: submit again once jobs have finished, without the support hint
+  waits <- fake_waits()
+  key_full <- function(url_str, params, timeout_seconds = 60) {
+    return(list(list(job_id = "", status = "error",
+                     message = "Job submission limit reached. Please wait for your jobs to finish before submitting new ones.")))
+  }
+  error_message <- tryCatch(
+    STRINGdb:::submit_values_ranks_job_when_possible("https://s", 9606, "9606.A\t1", key_info, options, 10, quiet = TRUE,
+                                                     send = key_full, sleep = waits$sleep, clock = waits$clock),
+    error = function(e) conditionMessage(e)
+  )
+  checkTrue(grepl("within 10 seconds, because this API key already has its maximum of 1000 jobs", error_message, fixed = TRUE))
+  checkTrue(grepl("Submit again once some of your jobs have finished.", error_message, fixed = TRUE))
+  checkTrue(!grepl("contact STRING support", error_message, fixed = TRUE))
 
   # other refusals stop at once
   wrong_species <- function(url_str, params, timeout_seconds = 60) {
@@ -1758,7 +1800,7 @@ test_values_ranks_needs_string_12 <- function() {
       function() string_db$submit_values_ranks_enrichment(c("9606.A", "9606.B"), c(1, -1)),
       function() string_db$get_values_ranks_status("job1"),
       function() string_db$get_values_ranks_results("job1"),
-      function() string_db$get_api_key(new = TRUE)
+      function() string_db$get_api_key()
     )
     for (call in calls) {
       error_message <- tryCatch(call(), error = function(e) conditionMessage(e))
@@ -1766,5 +1808,25 @@ test_values_ranks_needs_string_12 <- function() {
     }
   })
   checkEquals(0, requests)
+
+}
+
+
+test_values_ranks_timeout_per_job <- function() {
+
+  # the timeout is per job and starts at the job's submission: STRING takes one unfinished job at
+  # a time, so the three jobs are submitted one after another. The run takes longer than the
+  # timeout, but each job finishes within its own.
+  options <- STRINGdb:::normalize_values_ranks_options(0.01, "descending")
+  waits <- fake_waits()
+  run <- STRINGdb:::run_values_ranks_jobs(
+    "https://s", 9606, three_experiments()$experiments, list(key = "key1", source = "environment"), options,
+    timeout_seconds = 20, quiet = TRUE, send = fake_values_ranks_server(rounds = 2, limit = 1),
+    fetch = fake_download(), sleep = waits$sleep, clock = waits$clock
+  )
+  checkEquals(c("A", "B", "C"), sort(names(run$results)))
+  checkEquals(0, length(run$pending))
+  checkTrue(!run$timed_out)
+  checkTrue(waits$now > 20)
 
 }

@@ -515,7 +515,7 @@ Description:
 
 Input parameters:
   "string_ids"        vector of STRING identifiers.
-  "caller_identity"   ignored, with a warning (the package sends its own caller identity); it will be removed in the next Bioconductor release, so do not specify it.
+  "caller_identity"   ignored, with a warning; removed in the next Bioconductor release, so do not specify it.
 
 Author(s):
    Damian Szklarczyk
@@ -548,57 +548,42 @@ Author(s):
     ## get_api_key
     #########################################
 
-    get_api_key = function(new = FALSE) {
+    get_api_key = function() {
       '
 Description:
-  Returns the STRING API key that the values/ranks methods (get_values_ranks_enrichment, a GSEA-like
-  enrichment analysis computed on STRING\'s servers, not locally) use on this computer: the
-  environment variable STRINGDB_API_KEY when it is set, otherwise the key that the package saved on
-  this computer, otherwise a new key from STRING, which it saves. STRING gives the key without
-  registration; the package requests it as STRINGdb-package, so that it works at once. A new key
-  needs STRING version 12.0 or later. get_values_ranks_enrichment and submit_values_ranks_enrichment
-  get the key in the same way (get_values_ranks_status and get_values_ranks_results stop without a
-  key), so calling get_api_key is needed only to see the key, e.g. to use it on other computers as
-  STRINGDB_API_KEY.
-
-Input parameters:
-  "new"               TRUE requests a new key from STRING and saves it in place of the saved key
-                      (default FALSE). STRING keeps each job for the key that submitted it, so the
-                      jobs of the earlier key are no longer read with the new one.
+  Returns the STRING API key of this computer. The values/ranks methods use this key.
+  The key is taken from, in this order:
+    1. the environment variable STRINGDB_API_KEY, if it is set;
+    2. the key saved on this computer;
+    3. a new key, which the method requests from STRING and saves.
+  You need this method only to see the key.
 
 Author(s):
    Damian Szklarczyk
 '
 
-      if (!(is.logical(new) && length(new) == 1 && !is.na(new))) {
-        stop("ERROR: new should be TRUE or FALSE.", call. = FALSE)
-      }
       key_file <- values_ranks_key_file()
       environment_key <- trimws(Sys.getenv("STRINGDB_API_KEY"))
 
-      if (!new) {
-        if (nchar(environment_key) > 0) {
-          message("The STRING API key in the environment variable STRINGDB_API_KEY: ", environment_key)
-          return(invisible(environment_key))
-        }
-        saved_key <- read_saved_api_key(key_file)
-        if (nchar(saved_key) > 0) {
-          message("The STRING API key of this computer, saved in ", key_file, ": ", saved_key)
-          return(invisible(saved_key))
-        }
+      if (nchar(environment_key) > 0) {
+        message("The STRING API key in the environment variable STRINGDB_API_KEY: ", environment_key)
+        return(invisible(environment_key))
+      }
+      saved_key <- read_saved_api_key(key_file)
+      if (nchar(saved_key) > 0) {
+        message("The STRING API key of this computer, saved in ", key_file, ": ", saved_key)
+        return(invisible(saved_key))
       }
 
       # a new key: STRING has API keys since version 12.0
       check_values_ranks_version(version)
 
-      # the key that new = TRUE replaces is shown, as its jobs are read only with it. The key is
-      # requested with the package's caller identity, with which STRING makes it work at once.
-      previous_key <- read_saved_api_key(key_file)
+      # the key is requested with the package's caller identity, with which STRING makes it work at once
       key <- request_string_api_key(stable_url)
 
-      # without new, a key that another R session saved meanwhile is kept, and used
-      saved_key <- save_api_key(key$api_key, key_file, replace = new)
-      if (!new && nchar(saved_key) > 0 && saved_key != key$api_key) {
+      # a key that another R session saved meanwhile is kept, and used
+      saved_key <- save_api_key(key$api_key, key_file, replace = FALSE)
+      if (nchar(saved_key) > 0 && saved_key != key$api_key) {
         message("The STRING API key of this computer, saved in ", key_file, " by another R session: ", saved_key)
         return(invisible(saved_key))
       }
@@ -617,15 +602,7 @@ Author(s):
           sep = ""
         )
       }
-      replaced_note <- ""
-      if (saved && new && nchar(previous_key) > 0 && previous_key != key$api_key) {
-        replaced_note <- paste(" It replaces the key ", previous_key, ", whose jobs are read only with that key.", sep = "")
-      }
-      environment_note <- ""
-      if (nchar(environment_key) > 0) {
-        environment_note <- " The environment variable STRINGDB_API_KEY is set, and its key is used instead."
-      }
-      message("Your new STRING API key: ", key$api_key, ".", note, where, replaced_note, environment_note)
+      message("Your new STRING API key: ", key$api_key, ".", note, where)
       return(invisible(key$api_key))
     },
 
@@ -637,55 +614,37 @@ Author(s):
                                            timeout = 7200, quiet = FALSE) {
       '
 Description:
-  A GSEA-like gene set enrichment analysis of a whole ranked experiment, computed on STRING\'s servers,
-  not locally: STRING\'s values/ranks enrichment ("Proteins with Values/Ranks" on the STRING website).
-  The method submits a job to STRING\'s job queue, waits for it and downloads the results; the
-  identifiers and values are sent to STRING. It needs STRING version 12.0 or later. Give it all
-  measured proteins with their values, e.g. log fold changes, without any cutoff. It reports the
-  terms whose proteins gather at the top, at the bottom or at both ends of the ranked list. STRING
-  tests each term with a Kolmogorov-Smirnov test and small terms also with an aggregate fold change
-  test, with the Benjamini-Hochberg FDR within each category; these statistics differ from the GSEA
-  of Subramanian et al. (e.g. fgsea or clusterProfiler), so the scores and FDRs of the two cannot be
-  compared. A background of set_background() does not apply.
-  Several experiments run at once: give a table of values, with one column for each experiment. The
-  method submits one job for each, which STRING runs side by side (up to 1000 jobs of an API key
-  wait or run at once; the others are submitted as jobs finish), and returns all results. A job that
-  fails does not stop the others, but a refusal of the first job (e.g. for a wrong species) stops
-  the call. To submit without waiting, use submit_values_ranks_enrichment.
-  Returns, for a vector of values, a data frame with the columns of get_enrichment where they mean the
-  same (category, with its codes such as "Process" or "RCTM"; term, number_of_genes,
-  number_of_genes_in_background, inputGenes, preferredNames), then enrichment_score, direction, method,
-  fdr, description, and the list columns inputValues and inputRanks (the values and ranks of the
-  term\'s proteins), with the attributes job_id, page_url, graph_url, download_url and
-  string_version (inputGenes and preferredNames are comma-separated text, as in get_enrichment; in the
-  next Bioconductor release they will become list columns in both); for a table, a list of such data
-  frames named by experiment, with the attributes status (for each experiment "success", "failed",
-  "unfinished" or "not submitted"; its entry is NULL unless "success", and a warning says why) and
-  job_ids. If the wait ends early, the jobs keep running on STRING: get their results later with
-  get_values_ranks_results. For a table, the timeout returns the results so far (the attribute
-  not_submitted gives the column numbers of the experiments that were not submitted); for a vector,
-  it is an error whose message gives the job id. A lost connection ends with an error, and an
-  interrupt (Ctrl-C) stops the call; a message then says how to get the results later.
+  A GSEA-like enrichment analysis of a ranked list of proteins. It is STRING\'s "Proteins with
+  Values/Ranks" analysis, computed on STRING\'s servers, not locally.
+  Each term is tested with a Kolmogorov-Smirnov (KS) test. Small terms are tested with the more
+  sensitive aggregate fold change (AFC) test.
+  The method reports terms enriched at the top or at the bottom of the list. It also reports terms
+  enriched at both ends: terms whose proteins are partly up- and partly down-regulated.
+  The method waits until STRING has finished. Then it returns the results as a data frame.
+  A table of values, with one column per experiment, returns a list of data frames.
+  For many experiments, e.g. tens or hundreds of columns, do not block the R session. Submit them
+  with submit_values_ranks_enrichment, and get the results later with get_values_ranks_results.
 
 Input parameters:
-  "string_ids"      vector of STRING identifiers (e.g. the STRING_id column of map()), one per value,
-                      paired with the values by position. Rows without an identifier or a value are
-                      left out, infinite values with a warning, and an identifier given more than once
-                      keeps its value farthest from 0 (so give signed values, e.g. log fold changes,
-                      not p-values).
-  "values"          the values to rank, e.g. log fold changes or t statistics: a numeric vector, or
-                      a matrix or data frame with one numeric column for each experiment (an unnamed
-                      column is named experiment_1, experiment_2, ...) and one row for each
-                      identifier. Values named by STRING identifiers in another order than string_ids
-                      stop. The values can also come alone, as R\'s GSEA packages take them: a numeric
-                      vector named by STRING identifiers, or a table with STRING identifiers as row
-                      names.
-  "max_fdr"         FDR cutoff of the reported terms (above 0, at most 0.25; default 0.05).
-  "rank_direction"  "descending" (default: rank 1 is the largest value, and "top" the end of the
-                      largest values) or "ascending" (rank 1 is the smallest value). It only names the
-                      ends of the ranked list and numbers the ranks; the enrichment is the same.
-  "timeout"         seconds to wait for the jobs (default 7200).
+  "string_ids"      STRING identifiers, one per value, e.g. the STRING_id column of map().
+  "values"          the values to rank, e.g. log fold changes. A vector, or a table with one column
+                      per experiment. A vector named by STRING identifiers can be given alone.
+  "max_fdr"         FDR cutoff of the reported terms. Default 0.05, at most 0.25.
+  "rank_direction"  "descending" (default) or "ascending". It only names the ends of the list.
+  "timeout"         seconds each job may take, from its submission to STRING. Default 7200.
   "quiet"           TRUE to print no progress messages.
+
+Output:
+  A data frame with one row per enriched term. The columns:
+    category, term, number_of_genes, number_of_genes_in_background,
+    inputGenes, preferredNames: the term\'s proteins, as in get_enrichment,
+    enrichment_score: from 0 to 10,
+    direction: "top", "bottom" or "both ends",
+    method: "ks" or "afc",
+    fdr, description,
+    inputValues, inputRanks: list columns with the values and ranks of the term\'s proteins.
+  For a table of values, a list of such data frames, named by experiment. Its attributes status
+  and job_ids give the state and the job of each experiment.
 
 Author(s):
    Damian Szklarczyk
@@ -715,9 +674,8 @@ Author(s):
         if (!quiet) {
           message("Submitted ", input$n_submitted, " proteins to STRING's values/ranks enrichment (job ", submission$job_id, ").")
         }
-        # the time that the submission took counts towards the timeout
-        remaining_timeout <- max(1, timeout - submission$waited)
-        return(collect_values_ranks_results(stable_url, submission$key_info$key, submission$job_id, remaining_timeout, quiet))
+        # the timeout is per job and starts at the submission: the wait for a free slot does not count
+        return(collect_values_ranks_results(stable_url, submission$key_info$key, submission$job_id, timeout, quiet))
       }
 
       run <- run_values_ranks_jobs(
@@ -735,23 +693,16 @@ Author(s):
                                               quiet = FALSE) {
       '
 Description:
-  Submits STRING\'s values/ranks enrichment (the GSEA-like analysis of get_values_ranks_enrichment,
-  computed on STRING\'s servers, not locally; STRING version 12.0 or later) without waiting: one job
-  for each experiment, which STRING\'s queue runs side by side. Returns the job ids at once; get the
-  results later with get_values_ranks_results(job_ids), also in a new R session on this computer, and
-  see their progress with get_values_ranks_status(job_ids). Up to 1000 jobs of an API key may wait or
-  run at once: experiments beyond STRING\'s limit are not submitted, with a warning, and named by the
-  attribute not_submitted of the job ids (their column numbers, named by experiment); submit them
-  again once jobs have finished, with values[, attr(job_ids, "not_submitted"), drop = FALSE]. A
-  submission request that fails is tried again a few times. For a vector of values, a refusal (also
-  for the limit) is an error; for a table, a refusal of the first job, or no job taken at all, is an
-  error, and a later experiment that STRING refuses is named only in a warning.
-  Returns, for a vector of values, the job id; for a table, the job ids named by experiment.
+  Submits STRING\'s values/ranks enrichment and returns at once. The R session is not blocked while
+  STRING computes. This suits many experiments, e.g. tens or hundreds of columns.
+  Get the results later with get_values_ranks_results.
+  Returns the job id for a vector of values, or the job ids named by experiment for a table.
+  STRING runs up to 1000 jobs per API key. Experiments beyond that are not submitted. The
+  attribute not_submitted lists them.
 
 Input parameters:
   "string_ids", "values", "max_fdr", "rank_direction", "quiet"
-                    as for get_values_ranks_enrichment, also the values alone (a named vector, or a
-                    table with STRING identifiers as row names).
+                    as for get_values_ranks_enrichment.
 
 Author(s):
    Damian Szklarczyk
@@ -788,23 +739,31 @@ Author(s):
         wait = FALSE, quiet = quiet
       )
 
+      advice <- ""
+      if (nchar(run$held_back_advice) > 0) {
+        advice <- paste("", run$held_back_advice)
+      }
       if (length(run$job_ids) == 0) {
-        stop("ERROR: STRING took none of the values/ranks jobs: ", run$held_back, call. = FALSE)
+        stop("ERROR: STRING took none of the values/ranks jobs. ", run$held_back_text, advice, call. = FALSE)
       }
       job_ids <- run$job_ids
       if (length(run$pending) > 0) {
         # the experiments that STRING could not take now, for a later submission: their column numbers
         attr(job_ids, "not_submitted") <- values_ranks_not_submitted(run$pending)
         warning(
-          length(run$pending), " of ", length(prepared$experiments), " experiments were not submitted: ", run$held_back,
-          " Their column numbers, named by experiment, are the attribute not_submitted of the job ids: submit ",
-          "them again once jobs have finished, with values[, attr(job_ids, \"not_submitted\"), drop = FALSE] (up to ",
-          "1000 jobs of an API key may wait or run at once).",
+          "Not submitted: ", length(run$pending), " of ", length(prepared$experiments), " experiments. ", run$held_back_text,
+          " Their column numbers are the attribute not_submitted of the job ids, so ",
+          "values[, attr(job_ids, \"not_submitted\"), drop = FALSE] are their values.", advice,
           call. = FALSE
         )
       }
       if (length(run$failed) > 0) {
-        warning(values_ranks_experiments_warning("experiments were refused by STRING", run$failed), call. = FALSE)
+        warning(
+          values_ranks_experiments_warning(
+            "experiments were refused by STRING", run$failed, "experiment was refused by STRING"
+          ),
+          call. = FALSE
+        )
       }
       return(job_ids)
     },
@@ -816,18 +775,13 @@ Author(s):
     get_values_ranks_status = function(job_ids = NULL) {
       '
 Description:
-  The state of values/ranks jobs (STRING\'s GSEA-like enrichment, computed on STRING\'s servers),
-  from one request to STRING, without waiting; without job ids, of all jobs of the API key, oldest
-  first, e.g. to find job ids that were lost. Returns a data frame with the columns experiment (the
-  name of the job; NA when the job ids have no names), job_id, status ("submitted": waiting in
-  STRING\'s queue; "running"; "success": finished; "failed", also a job that STRING no longer has;
-  or "unknown": not listed for the key), message (STRING\'s) and creation_time.
+  Returns the state of values/ranks jobs, with one request to STRING. It does not wait for the
+  jobs. The data frame has the columns experiment, job_id, status, message and creation_time.
+  The status is "submitted", "running", "success", "failed" or "unknown".
 
 Input parameters:
-  "job_ids"         the job ids, e.g. what submit_values_ranks_enrichment returns (default NULL: all
-                      jobs of the API key). STRING keeps each job for the API key that submitted it:
-                      the key of this computer, or another one given as STRINGDB_API_KEY (see
-                      get_api_key).
+  "job_ids"         job ids, e.g. from submit_values_ranks_enrichment. Without job ids (the
+                      default), all jobs of the API key, oldest first.
 
 Author(s):
    Damian Szklarczyk
@@ -849,24 +803,13 @@ Author(s):
     get_values_ranks_results = function(job_ids, timeout = 7200, quiet = FALSE) {
       '
 Description:
-  Returns the results of values/ranks jobs (STRING\'s GSEA-like enrichment, computed on STRING\'s
-  servers) submitted with submit_values_ranks_enrichment or get_values_ranks_enrichment, waiting for
-  the jobs that have not finished yet, e.g. after the wait of get_values_ranks_enrichment timed out
-  or was interrupted, or in a new R session. STRING keeps the results for a limited time.
-  The results have the form that get_values_ranks_enrichment gives for the same values: a vector of
-  values has one job id without a name, a table job ids named by experiment.
-  Returns, for one job id without a name, a data frame as get_values_ranks_enrichment (a failed job,
-  or the timeout, ends with an error); for several job ids, or named ones, a list of data frames
-  named by job (NULL for a job that failed, or that did not finish before the timeout, with a
-  warning), with the attributes status ("success", "failed" or "unfinished") and job_ids. A download
-  that fails is tried again a few times.
+  Returns the results of values/ranks jobs. It waits for the jobs that have not finished.
+  The results have the same form as from get_values_ranks_enrichment: a data frame for one job id
+  without a name, otherwise a list of data frames.
 
 Input parameters:
-  "job_ids"         one or more job ids: what submit_values_ranks_enrichment returns, the job_id
-                      attribute of the results of get_values_ranks_enrichment, or those in its messages.
-                      STRING keeps each job for the API key that submitted it: the key of this
-                      computer, or another one given as STRINGDB_API_KEY (see get_api_key).
-  "timeout"         seconds to wait for the jobs (default 7200).
+  "job_ids"         job ids, e.g. from submit_values_ranks_enrichment.
+  "timeout"         seconds to wait for each job. Default 7200.
   "quiet"           TRUE to print no progress messages.
 
 Author(s):
@@ -933,7 +876,7 @@ Input parameters:
   "number_of_term_shown"   maximum number of terms shown on the plot (STRING shows at most 100)
   "x_axis"                 variable used on the x-axis ("signal", "strength", "FDR", "gene_count" or "count",
                            which STRING treats as "gene_count"; count needs STRING version 12.5 or later)
-  "caller_identity"        ignored, with a warning (the package sends its own caller identity); it will be removed in the next Bioconductor release, so do not specify it
+  "caller_identity"        ignored, with a warning; removed in the next Bioconductor release, so do not specify it
   "graph_type"             "dotplot" (default) or "barplot"
   "sort_by"                variable that decides which terms are shown and in which order
                            ("signal", "strength", "FDR", "gene_count" or "count"; default NULL: the x_axis variable)
@@ -1095,8 +1038,7 @@ Author(s):
 
     plot_network = function(string_ids, payload_id = NULL, required_score = NULL, add_link = FALSE, network_flavor = "evidence", add_summary = TRUE,
                             typed_physical_edges = NULL, typed_regulatory_edges = NULL, show_regulatory_signs = NULL,
-                            add_color_nodes = NULL, add_white_nodes = NULL,
-                            show_query_node_labels = NULL, channels = NULL) {
+                            add_color_nodes = NULL, add_white_nodes = NULL, channels = NULL) {
       '
 Description:
   Plots an image of the STRING network with the given proteins.
@@ -1123,9 +1065,6 @@ Input parameters:
                       (a whole number of at least 0; default NULL: STRING\'s default, which adds none, or
                       10 white partners when a single protein is given). Giving add_color_nodes turns off
                       those 10 white partners unless add_white_nodes is given too.
-  "show_query_node_labels"  labels the given proteins with the identifiers submitted in string_ids
-                      instead of their STRING names (TRUE/FALSE or 0/1, default FALSE); with STRING
-                      identifiers, the labels are those identifiers, e.g. 9606.ENSP00000269305
   "channels"          the evidence channels used for the interactions: one or more of "neighborhood", "fusion",
                       "cooccurrence", "coexpression", "experiments", "databases" and "textmining", or the
                       column names of the detailed interaction tables ("cooccurence", "experimental",
@@ -1133,7 +1072,7 @@ Input parameters:
                       (default NULL: all channels; needs STRING version 12.0 or later). STRING recomputes
                       the combined score of each interaction from the selected channels, and required_score
                       applies to the recomputed score.
-  These four options are passed on to get_png, and to get_link for add_link. With add_color_nodes NULL the
+  These three options are passed on to get_png, and to get_link for add_link. With add_color_nodes NULL the
   link adds no interaction partners, while the picture of a single protein shows STRING\'s 10 white partners;
   give add_color_nodes (and add_white_nodes) to get the same network in the picture and on the linked page.
   The summary text (add_summary) is computed with all channels, for the given proteins only (without the
@@ -1152,7 +1091,7 @@ Author(s):
       img <- get_png(string_ids, payload_id = payload_id, required_score = required_score, network_flavor = network_flavor,
         typed_physical_edges = typed_physical_edges, typed_regulatory_edges = typed_regulatory_edges,
         show_regulatory_signs = show_regulatory_signs, add_color_nodes = add_color_nodes,
-        add_white_nodes = add_white_nodes, show_query_node_labels = show_query_node_labels, channels = channels)
+        add_white_nodes = add_white_nodes, channels = channels)
       if (!is.null(img)) {
         plot(1:(dim(img)[2]), type = "n", xaxt = "n", yaxt = "n", xlab = "", ylab = "", ylim = c(1, dim(img)[1]), xlim = c(1, (dim(img)[2])), asp = 1)
         # the summary comes from ppi_enrichment, which has no channel selection: it uses all channels
@@ -1161,7 +1100,7 @@ Author(s):
           network_flavor = network_flavor, typed_physical_edges = typed_physical_edges,
           typed_regulatory_edges = typed_regulatory_edges, show_regulatory_signs = show_regulatory_signs,
           add_color_nodes = add_color_nodes, add_white_nodes = add_white_nodes,
-          show_query_node_labels = show_query_node_labels, channels = channels), cex = 0.7, side = 1)
+          channels = channels), cex = 0.7, side = 1)
         rasterImage(img, 1, 1, (dim(img)[2]), dim(img)[1])
       }
     },
@@ -1283,7 +1222,6 @@ Author(s):
                        cluster_name_size = NULL,
                        add_color_nodes = NULL,
                        add_white_nodes = NULL,
-                       show_query_node_labels = NULL,
                        channels = NULL) {
       '
 Description:
@@ -1308,7 +1246,7 @@ Input parameters:
   "flat_node_design"  disables 3D bubble design (TRUE/FALSE or 0/1, default TRUE)
   "center_node_labels"  centers protein names on nodes (TRUE/FALSE or 0/1, default FALSE)
   "custom_label_font_size"   changes the font size of node labels (from 5 to 50, default 12)
-  "caller_identity"   ignored, with a warning (the package sends its own caller identity); it will be removed in the next Bioconductor release, so do not specify it
+  "caller_identity"   ignored, with a warning; removed in the next Bioconductor release, so do not specify it
   "payload_id"        identifier of payload data on the STRING server (see method post_payload for additional informations)
   "typed_physical_edges"  include physical edges in the typed network view (TRUE/FALSE or 0/1)
   "typed_regulatory_edges"  include regulatory edges in the typed network view (TRUE/FALSE or 0/1)
@@ -1328,9 +1266,6 @@ Input parameters:
                       10 white partners when a single protein is given). Giving add_color_nodes turns off
                       those 10 white partners unless add_white_nodes is given too. Neither option is
                       used with network_term_id: STRING then adds no interaction partners.
-  "show_query_node_labels"  labels the given proteins with the identifiers submitted in string_ids
-                      instead of their STRING names (TRUE/FALSE or 0/1, default FALSE); with STRING
-                      identifiers, the labels are those identifiers, e.g. 9606.ENSP00000269305
   "channels"          the evidence channels used for the interactions: one or more of "neighborhood", "fusion",
                       "cooccurrence", "coexpression", "experiments", "databases" and "textmining", or the
                       column names of the detailed interaction tables ("cooccurence", "experimental",
@@ -1374,7 +1309,6 @@ Author(s):
       block_structure_pics_in_bubbles <- normalize_api_flag(block_structure_pics_in_bubbles, "block_structure_pics_in_bubbles")
       flat_node_design <- normalize_api_flag(flat_node_design, "flat_node_design")
       center_node_labels <- normalize_api_flag(center_node_labels, "center_node_labels")
-      show_query_node_labels <- normalize_api_flag(show_query_node_labels, "show_query_node_labels")
       add_color_nodes <- normalize_api_count(add_color_nodes, "add_color_nodes")
       add_white_nodes <- normalize_api_count(add_white_nodes, "add_white_nodes")
 
@@ -1416,7 +1350,6 @@ Author(s):
         flat_node_design = flat_node_design,
         center_node_labels = center_node_labels,
         custom_label_font_size = custom_label_font_size,
-        show_query_node_labels = show_query_node_labels,
         add_color_nodes = add_color_nodes,
         add_white_nodes = add_white_nodes,
         typed_physical_edges = typed_controls$typed_physical_edges,
@@ -2307,7 +2240,6 @@ Author(s):
                         show_regulatory_signs = NULL,
                         add_color_nodes = NULL,
                         add_white_nodes = NULL,
-                        show_query_node_labels = NULL,
                         channels = NULL) {
       '
 Description:
@@ -2326,7 +2258,7 @@ Input parameters:
   "flat_node_design"  disables 3D bubble design (TRUE/FALSE or 0/1, default TRUE)
   "center_node_labels"  centers protein names on nodes (TRUE/FALSE or 0/1, default FALSE)
   "custom_label_font_size"   changes the font size of node labels (from 5 to 50, default 12)
-  "caller_identity"   ignored, with a warning (the package sends its own caller identity); it will be removed in the next Bioconductor release, so do not specify it
+  "caller_identity"   ignored, with a warning; removed in the next Bioconductor release, so do not specify it
   "typed_physical_edges"  include physical edges in the typed network view (TRUE/FALSE or 0/1)
   "typed_regulatory_edges"  include regulatory edges in the typed network view (TRUE/FALSE or 0/1)
   "show_regulatory_signs"  show positive/negative regulatory signs in the typed network view (TRUE/FALSE or 0/1)
@@ -2335,9 +2267,6 @@ Input parameters:
   "add_white_nodes"   adds this many further interaction partners, drawn white, after the coloured ones
                       (a whole number of at least 0; default NULL: none). Neither option is used with
                       network_term_id: STRING then adds no interaction partners.
-  "show_query_node_labels"  labels the given proteins with the identifiers submitted in string_ids
-                      instead of their STRING names (TRUE/FALSE or 0/1, default FALSE); with STRING
-                      identifiers, the labels are those identifiers, e.g. 9606.ENSP00000269305
   "channels"          the evidence channels used for the interactions: one or more of "neighborhood", "fusion",
                       "cooccurrence", "coexpression", "experiments", "databases" and "textmining", or the
                       column names of the detailed interaction tables ("cooccurence", "experimental",
@@ -2385,7 +2314,6 @@ Author(s):
       block_structure_pics_in_bubbles <- normalize_api_flag(block_structure_pics_in_bubbles, "block_structure_pics_in_bubbles")
       flat_node_design <- normalize_api_flag(flat_node_design, "flat_node_design")
       center_node_labels <- normalize_api_flag(center_node_labels, "center_node_labels")
-      show_query_node_labels <- normalize_api_flag(show_query_node_labels, "show_query_node_labels")
       add_color_nodes <- normalize_api_count(add_color_nodes, "add_color_nodes")
       add_white_nodes <- normalize_api_count(add_white_nodes, "add_white_nodes")
 
@@ -2425,7 +2353,6 @@ Author(s):
         flat_node_design = flat_node_design,
         center_node_labels = center_node_labels,
         custom_label_font_size = custom_label_font_size,
-        show_query_node_labels = show_query_node_labels,
         add_color_nodes = add_color_nodes,
         add_white_nodes = add_white_nodes,
         typed_physical_edges = typed_controls$typed_physical_edges,

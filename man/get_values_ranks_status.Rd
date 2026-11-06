@@ -5,20 +5,26 @@
 get_values_ranks_status
 }
 \description{
-Returns the state of values/ranks jobs, STRING's GSEA-like enrichment analysis that is computed on STRING's servers, not locally, without waiting: one request to STRING reports all of them. Without job identifiers, it lists all jobs of the API key, e.g. to find job identifiers that were lost. It needs STRING version 12.0 or later.
+Returns the state of values/ranks jobs, with one request to STRING. It does not wait for the jobs.
 }
 \usage{
 \S4method{get_values_ranks_status}{STRINGdb}(job_ids=NULL)
 }
 \arguments{
   \item{job_ids}{
-the job identifiers, named or not, e.g. what \code{submit_values_ranks_enrichment} returns. The default \code{NULL} lists all jobs of the API key, oldest first. STRING keeps each job for the API key that submitted it: the key of this computer, or another one given as \code{STRINGDB_API_KEY} (see \code{get_api_key}).
+job identifiers, e.g. from \code{submit_values_ranks_enrichment}. The default, \code{NULL}, lists all jobs of the API key, oldest first.
+STRING keeps each job for the API key that submitted it (see \code{get_api_key}).
 }
 }
 \value{
-A data frame with one row for each job and the columns \code{experiment} (the name of the job identifier; \code{NA} when the job identifiers have no names, and the job identifier for an unnamed one among named ones), \code{job_id},
-\code{status}, one of \code{"submitted"} (waiting in STRING's queue), \code{"running"}, \code{"success"} (finished: \code{get_values_ranks_results} returns the results), \code{"failed"} (the message gives STRING's reason; also a job that STRING no longer has) and \code{"unknown"} (STRING does not list the job for this key: it was removed, or another key submitted it),
-\code{message} (STRING's) and \code{creation_time}.
+A data frame with one row per job and these columns:
+\describe{
+  \item{experiment}{the name of the job identifier}
+  \item{job_id}{the job identifier}
+  \item{status}{\code{"submitted"}, \code{"running"}, \code{"success"} or \code{"failed"}; \code{"unknown"} if this API key does not have the job}
+  \item{message}{STRING's message}
+  \item{creation_time}{when the job was submitted}
+}
 }
 \seealso{
 \code{submit_values_ranks_enrichment}, \code{get_values_ranks_results}

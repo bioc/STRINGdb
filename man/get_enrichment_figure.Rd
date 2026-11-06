@@ -35,7 +35,7 @@ maximum number of terms displayed on the plot. STRING shows at most 100.
 variable used on the x-axis and, without \code{sort_by}, for ranking the terms: \code{"signal"}, \code{"strength"}, \code{"FDR"}, \code{"gene_count"}, or \code{"count"}, which STRING treats as \code{"gene_count"}. \code{"count"} needs STRING version 12.5 or later.
 }
   \item{caller_identity}{
-ignored, with a warning (once per R session): the package sends its own caller identity (\code{"STRINGdb-package"}) with every request to STRING. It is kept, with the default \code{NULL}, so that code written for earlier versions still runs, and will be removed in the next Bioconductor release, so do not specify it.
+ignored, with a warning; it will be removed in the next Bioconductor release, so do not specify it.
 }
   \item{graph_type}{
 the kind of plot: \code{"dotplot"} (default) or \code{"barplot"}.

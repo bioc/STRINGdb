@@ -1060,6 +1060,11 @@ merge.with.order <- function(x, y, ..., sort = T) {
 # comes first in the result, followed by the other columns of dfToMap and then
 # by strColToDfMap.
 multi_map_df <- function(dfToMap, dfMap, strColsFrom, strColFromDfMap, strColToDfMap, caseSensitive = FALSE) {
+  # a matrix (which STRINGdb 2.24 and earlier also mapped) is mapped as a data frame
+  if (is.matrix(dfToMap)) {
+    dfToMap <- as.data.frame(dfToMap, stringsAsFactors = FALSE)
+  }
+
   # merge() reorders and repeats rows, so every row carries the number of its
   # input row: the identifiers are restored, and the rows ordered, by it
   input_row_col <- "input_row..."
@@ -1185,6 +1190,39 @@ VALUES_RANKS_FINISHED_STATES <- c("success", "done")
 VALUES_RANKS_FAILED_STATES <- c("error", "failure", "failed")
 VALUES_RANKS_WAITING_STATES <- c("submitted", "preparing")
 
+# The end of the messages of a timeout: STRING's servers may be busy, so a timeout that repeats
+# is for STRING's support.
+VALUES_RANKS_SUPPORT_HINT <- "If this keeps happening, please contact STRING support: https://string-db.org/cgi/help"
+
+
+# A count with its noun: "1 job", "2 jobs".
+count_text <- function(n, singular, plural = paste(singular, "s", sep = "")) {
+  if (n == 1) {
+    return(paste(n, singular))
+  }
+  return(paste(n, plural))
+}
+
+
+# Why STRING did not take values/ranks jobs, and what to do, from STRING's refusal (string_message),
+# after lead (e.g. "STRING did not take them within 7200 seconds"). STRING refuses the jobs of an
+# API key that already has its maximum of 1000 jobs waiting or running ("Job submission limit
+# reached ..."): then the user's own jobs have to finish first. Other refusals mean that STRING is
+# busy: then to try again later, and to contact STRING support if it keeps happening. Returns a
+# list with text (sentences) and advice (a sentence).
+values_ranks_refusal_explanation <- function(lead, string_message) {
+  if (grepl("limit reached", string_message, ignore.case = TRUE)) {
+    return(list(
+      text = paste(lead, ", because this API key already has its maximum of 1000 jobs waiting or running.", sep = ""),
+      advice = "Submit again once some of your jobs have finished."
+    ))
+  }
+  return(list(
+    text = paste(lead, ". STRING's answer: ", sub("\\.$", "", trimws(string_message)), ".", sep = ""),
+    advice = paste("STRING's servers may be busy: please try again later.", VALUES_RANKS_SUPPORT_HINT)
+  ))
+}
+
 # The first and the longest wait between two status requests, in seconds.
 VALUES_RANKS_FIRST_POLL_INTERVAL <- 5
 VALUES_RANKS_LONGEST_POLL_INTERVAL <- 30
@@ -1309,7 +1347,7 @@ values_ranks_error_message <- function(message) {
   }
   if (grepl("Api key does not exist|Api key not provided", message)) {
     return(paste(
-      message, " Check the key given as api_key or STRINGDB_API_KEY, or leave both out to use the key ",
+      message, " If STRINGDB_API_KEY is set, check its key, or unset it to use the key ",
       "that the package keeps on this computer (see get_api_key).",
       sep = ""
     ))
@@ -1752,7 +1790,7 @@ submit_first_values_ranks_job <- function(stable_url, species, input_text, key_i
   } else {
     warning(
       "STRING did not know the API key ", key_info$replaced_key, " saved in ", key_file, "; it is replaced by ",
-      "the new key ", key_info$key, ". Jobs of the old key are read only with it (api_key).",
+      "the new key ", key_info$key, ".",
       call. = FALSE
     )
   }
@@ -1792,11 +1830,11 @@ submit_values_ranks_job_when_possible <- function(stable_url, species, input_tex
       key_info <- submission$key_info
     }
     if (clock() - started >= timeout_seconds) {
-      stop(
-        "ERROR: STRING did not take the values/ranks job within ", timeout_seconds, " seconds: ",
-        submission$string_message,
-        call. = FALSE
+      explanation <- values_ranks_refusal_explanation(
+        paste("STRING did not take the values/ranks job within", timeout_seconds, "seconds"),
+        submission$string_message
       )
+      stop("ERROR: ", explanation$text, " ", explanation$advice, call. = FALSE)
     }
     if (!quiet && !told) {
       message(
@@ -1845,7 +1883,7 @@ get_values_ranks_job_status <- function(stable_url, api_key, job_id, send = post
     }
     explanation <- paste(
       explanation, " STRING keeps each job for the API key that submitted it; please use the same key ",
-      "as for the submission (api_key, STRINGDB_API_KEY or the key saved on this computer).",
+      "as for the submission (STRINGDB_API_KEY or the key saved on this computer).",
       sep = ""
     )
     stop(values_ranks_refused_error(paste(
@@ -1936,8 +1974,8 @@ wait_for_values_ranks_job <- function(stable_url, api_key, job_id, timeout_secon
 
     if (clock() - started >= timeout_seconds) {
       stop(
-        "ERROR: values/ranks job ", job_id, " did not finish within ", timeout_seconds,
-        " seconds. It keeps running on STRING. ", resume_hint,
+        "ERROR: values/ranks job ", job_id, " did not finish within ", timeout_seconds, " seconds. ",
+        "It keeps running on STRING. ", resume_hint, " STRING's servers may be busy. ", VALUES_RANKS_SUPPORT_HINT,
         call. = FALSE
       )
     }
@@ -2370,10 +2408,10 @@ report_left_out_rows <- function(prepared) {
 
   if (!prepared$several) {
     if (n_missing > 0) {
-      message("Left out ", n_missing, " rows without an identifier or without a value.")
+      message("Left out ", count_text(n_missing, "row"), " without an identifier or without a value.")
     }
     if (n_duplicates > 0) {
-      message("Left out ", n_duplicates, " repeated identifiers (each keeps its value farthest from 0).")
+      message("Left out ", count_text(n_duplicates, "repeated identifier"), " (each keeps its value farthest from 0).")
     }
     return(invisible(NULL))
   }
@@ -2433,11 +2471,11 @@ shorten_text <- function(text, width) {
 # The text of a warning about experiments or jobs, with the reason for each (reasons, named): the
 # first VALUES_RANKS_EXPERIMENTS_IN_WARNING of them, names shortened to 40 and reasons to 120
 # characters, and how many more there are. It stays short enough for R's limit on the length of a
-# warning (1000 characters).
-values_ranks_experiments_warning <- function(what, reasons) {
+# warning (1000 characters). what_for_one is what, for one of them (e.g. "experiment failed").
+values_ranks_experiments_warning <- function(what, reasons, what_for_one = what) {
   shown <- reasons[seq_len(min(length(reasons), VALUES_RANKS_EXPERIMENTS_IN_WARNING))]
   shown_items <- paste(shorten_text(names(shown), 40), ": ", shorten_text(unname(shown), 120), sep = "")
-  text <- paste(length(reasons), " ", what, ": ", paste(shown_items, collapse = "; "), sep = "")
+  text <- paste(count_text(length(reasons), what_for_one, what), ": ", paste(shown_items, collapse = "; "), sep = "")
   if (length(reasons) > length(shown)) {
     text <- paste(text, "; and ", length(reasons) - length(shown), " more", sep = "")
   }
@@ -2506,7 +2544,7 @@ get_values_ranks_jobs_states <- function(stable_url, api_key, send = post_string
     stop(values_ranks_refused_error(paste(
       "ERROR: STRING refused to report the values/ranks jobs of this API key: ", explanation,
       " STRING keeps each job for the API key that submitted it; please use the same key as for the ",
-      "submission (api_key, STRINGDB_API_KEY or the key saved on this computer).",
+      "submission (STRINGDB_API_KEY or the key saved on this computer).",
       sep = ""
     )))
   }
@@ -2665,9 +2703,13 @@ submit_next_values_ranks_experiment <- function(stable_url, species, experiment,
 # request that fails is tried again a few times, as with waiting).
 # Returns a list with job_ids (all submitted jobs, named), results (the downloaded results,
 # named), failed (the reasons of the experiments that failed, named), pending (the experiments not
-# submitted), held_back (why they were not) and timed_out (whether the timeout ended the wait,
-# leaving jobs unfinished). A job that fails does not stop the others, and a download that fails
-# is tried again in the next rounds. When the run ends early with an error (an interrupt, a lost
+# submitted), held_back (STRING's reason why they were not), held_back_text and held_back_advice
+# (that reason in sentences for the warnings, and what to do), timed_out (whether the timeout ended the wait for a
+# job or for a free slot) and submission_timed_out (whether experiments were not submitted for the
+# timeout). The timeout is per job: the wait for a job ends timeout_seconds after its submission
+# to STRING (for the jobs of job_ids, after the start of the run), and an experiment that STRING
+# cannot take waits as long for a free slot, from STRING's first refusal. A job that fails does
+# not stop the others, and a download that fails is tried again in the next rounds. When the run ends early with an error (an interrupt, a lost
 # connection, a refusal of the API key), a message says how to get the results later: with
 # job_ids_known = TRUE (the caller gave the job ids) by asking again with them, otherwise with
 # the job ids, which the message lists.
@@ -2685,17 +2727,28 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
   results <- list()
   failed <- character(0)
   held_back <- ""
+  # why experiments were not submitted, in sentences for the warnings, and what to do
+  held_back_text <- ""
+  held_back_advice <- ""
   timed_out <- FALSE
+  submission_timed_out <- FALSE
   last_report <- ""
   first_submission <- length(job_ids) == 0
   n_experiments <- length(job_ids) + length(pending)
+
+  # the start of each job's timeout (its submission; for the jobs of job_ids the start of the
+  # run), the start of the wait for a free slot, and the jobs whose wait has ended
+  submitted_at <- rep(started, length(job_ids))
+  names(submitted_at) <- names(job_ids)
+  held_back_since <- NA_real_
+  given_up <- character(0)
 
   # FALSE once the submissions are given up (the requests keep failing, or STRING refused the
   # API key): the experiments left are not submitted, and the wait goes on for the submitted jobs
   submitting <- TRUE
 
   unfinished <- function() {
-    return(setdiff(names(job_ids), c(names(results), names(failed))))
+    return(setdiff(names(job_ids), c(names(results), names(failed), given_up)))
   }
 
   resume_hint <- function() {
@@ -2746,6 +2799,12 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
             if (!step$request_failed) {
               # STRING answered (it cannot take the job now): the connection works
               failed_submission_requests <- 0
+              if (is.na(held_back_since)) {
+                held_back_since <- clock()
+              }
+              explanation <- values_ranks_refusal_explanation("STRING did not take them now", step$reason)
+              held_back_text <- explanation$text
+              held_back_advice <- explanation$advice
               break
             }
             failed_submission_requests <- failed_submission_requests + 1
@@ -2753,18 +2812,25 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
             if (failed_submission_requests >= VALUES_RANKS_MAX_FAILED_STATUS_REQUESTS) {
               submitting <- FALSE
               held_back <- paste("the submissions to STRING kept failing: ", step$reason, sep = "")
+              held_back_text <- paste("The submissions to STRING kept failing: ", sub("\\.$", "", step$reason), ".", sep = "")
+              held_back_advice <- "Please try again later."
             }
             break
           }
           if (step$outcome == "stop") {
             submitting <- FALSE
             held_back <- step$reason
+            held_back_text <- paste(sub("\\.$", "", step$reason), ".", sep = "")
+            held_back_advice <- ""
             break
           }
 
           failed_submission_requests <- 0
           if (step$outcome == "submitted") {
             job_ids[experiment_name] <- step$job_id
+            # the job's timeout starts at its submission, and the wait for a free slot is over
+            submitted_at[experiment_name] <- clock()
+            held_back_since <- NA_real_
             first_submission <- FALSE
             submitted_now <- submitted_now + 1
             if (!quiet && submitted_now %% 100 == 0) {
@@ -2774,11 +2840,13 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
             failed[experiment_name] <- step$reason
           }
           held_back <- ""
+          held_back_text <- ""
+          held_back_advice <- ""
           pending <- pending[-1]
         }
 
         if (!quiet && submitted_now > 0) {
-          message("Submitted ", submitted_now, " jobs to STRING's values/ranks enrichment.")
+          message("Submitted ", count_text(submitted_now, "job"), " to STRING's values/ranks enrichment.")
         }
         # without waiting, the run ends after the submissions. A submission request that failed is
         # tried again, a few times as with waiting; an experiment that STRING cannot take now (e.g.
@@ -2901,9 +2969,28 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
         break
       }
 
-      # the timeout ends the wait; the results so far are returned (values_ranks_results_list)
-      if (clock() - started >= timeout_seconds) {
+      # the timeout is per job: a job that has not finished timeout_seconds after its submission is
+      # not waited for any longer (it keeps running on STRING), and experiments that STRING could
+      # not take for as long are not submitted. The results so far are returned
+      # (values_ranks_results_list).
+      now <- clock()
+      late_jobs <- Filter(function(experiment_name) now - submitted_at[[experiment_name]] >= timeout_seconds, unfinished())
+      if (length(late_jobs) > 0) {
+        given_up <- c(given_up, late_jobs)
         timed_out <- TRUE
+      }
+      if (submitting && length(pending) > 0 && !is.na(held_back_since) && now - held_back_since >= timeout_seconds) {
+        submitting <- FALSE
+        submission_timed_out <- TRUE
+        timed_out <- TRUE
+        # held_back is STRING's last refusal
+        explanation <- values_ranks_refusal_explanation(
+          paste("STRING did not take them within", timeout_seconds, "seconds"), held_back
+        )
+        held_back_text <- explanation$text
+        held_back_advice <- explanation$advice
+      }
+      if (length(unfinished()) == 0 && (length(pending) == 0 || !submitting)) {
         break
       }
 
@@ -2919,7 +3006,8 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
 
   return(list(
     job_ids = job_ids, results = results, failed = failed, pending = pending, held_back = held_back,
-    timed_out = timed_out, timeout_seconds = timeout_seconds
+    held_back_text = held_back_text, held_back_advice = held_back_advice,
+    timed_out = timed_out, submission_timed_out = submission_timed_out, timeout_seconds = timeout_seconds
   ))
 }
 
@@ -2964,25 +3052,33 @@ values_ranks_results_list <- function(run, experiment_names, what = "experiments
   }
 
   if (length(run$failed) > 0) {
-    warning(values_ranks_experiments_warning(paste("values/ranks", what, "failed"), run$failed), call. = FALSE)
+    warning(
+      values_ranks_experiments_warning(
+        paste("values/ranks", what, "failed"), run$failed, paste("values/ranks", sub("s$", "", what), "failed")
+      ),
+      call. = FALSE
+    )
   }
 
   n_unfinished <- length(setdiff(names(run$job_ids), c(names(run$results), names(run$failed))))
   if (isTRUE(run$timed_out) && n_unfinished > 0) {
     warning(
-      n_unfinished, " of ", length(run$job_ids), " values/ranks jobs did not finish (or their results were not ",
-      "downloaded yet) within ", run$timeout_seconds, " seconds; their entries are NULL. The jobs keep running ",
-      "on STRING: get the results later with string_db$get_values_ranks_results(), with the job ids of the ",
-      "attribute job_ids of these results.",
+      n_unfinished, " of ", length(run$job_ids), " values/ranks jobs did not finish within ", run$timeout_seconds,
+      " seconds each. Their entries are NULL. The jobs keep running on STRING: get their results later with ",
+      "string_db$get_values_ranks_results() and the attribute job_ids of these results. STRING's servers may be ",
+      "busy. ", VALUES_RANKS_SUPPORT_HINT,
       call. = FALSE
     )
   }
 
   if (length(run$pending) > 0) {
+    advice <- ""
+    if (nchar(run$held_back_advice) > 0) {
+      advice <- paste("", run$held_back_advice)
+    }
     warning(
-      length(run$pending), " experiments were not submitted (", run$held_back, "); their entries are NULL. ",
-      "Their column numbers, named by experiment, are the attribute not_submitted of these results: submit ",
-      "them again with values[, attr(results, \"not_submitted\"), drop = FALSE].",
+      "Not submitted: ", length(run$pending), " of ", length(experiment_names), " ", what, ". ", run$held_back_text,
+      " Their entries are NULL, and values[, attr(results, \"not_submitted\"), drop = FALSE] are their values.", advice,
       call. = FALSE
     )
   }

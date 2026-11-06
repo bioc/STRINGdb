@@ -144,7 +144,7 @@ test_network_picture_options_requests <- function() {
   assignInNamespace("postFormSmart", capture_request, ns = "STRINGdb")
   on.exit(assignInNamespace("postFormSmart", original_post_form_smart, ns = "STRINGdb"), add = TRUE)
 
-  new_option_names <- c("add_color_nodes", "add_white_nodes", "show_query_node_labels", paste("channel", 1:7, sep = ""))
+  new_option_names <- c("add_color_nodes", "add_white_nodes", paste("channel", 1:7, sep = ""))
   string_ids <- c("9606.ENSP00000269305", "9606.ENSP00000258149")
   string_db <- STRINGdb$new(version = "12.5", species = 9606, score_threshold = 400)
 
@@ -161,15 +161,14 @@ test_network_picture_options_requests <- function() {
   sent_requests <- list()
   string_db$get_png(
     string_ids, output_format = "svg", add_color_nodes = 5, add_white_nodes = 0,
-    show_query_node_labels = TRUE, channels = c("experiments", "databases")
+    channels = c("experiments", "databases")
   )
-  string_db$get_link(string_ids, add_white_nodes = 3, show_query_node_labels = 0, channels = "textmining")
+  string_db$get_link(string_ids, add_white_nodes = 3, channels = "textmining")
 
   png_params <- sent_requests[[1]]$params
   checkTrue(grepl("/api/svg/network", sent_requests[[1]]$uri, fixed = TRUE))
   checkTrue(identical(png_params$add_color_nodes, 5L))
   checkTrue(identical(png_params$add_white_nodes, 0L))
-  checkTrue(identical(png_params$show_query_node_labels, 1L))
   checkEquals(unlist(png_params[paste("channel", 1:7, sep = "")], use.names = FALSE), c("off", "off", "off", "off", "on", "on", "off"))
 
   link_params <- sent_requests[[2]]$params
@@ -177,7 +176,6 @@ test_network_picture_options_requests <- function() {
   checkTrue(is.null(link_params$add_color_nodes))
   checkEquals(link_params$limit, 0)
   checkTrue(identical(link_params$add_white_nodes, 3L))
-  checkTrue(identical(link_params$show_query_node_labels, 0L))
   checkEquals(unlist(link_params[paste("channel", 1:7, sep = "")], use.names = FALSE), c(rep("off", 6), "on"))
 
   # STRING's network page takes add_color_nodes as its limit: get_link sends it as the limit too, instead of 0.
@@ -191,7 +189,7 @@ test_network_picture_options_requests <- function() {
   grDevices::pdf(NULL)
   string_db$plot_network(
     string_ids, add_link = TRUE, add_summary = FALSE, add_white_nodes = 2,
-    show_query_node_labels = TRUE, channels = "coexpression"
+    channels = "coexpression"
   )
   grDevices::dev.off()
   checkEquals(length(sent_requests), 2)
@@ -199,7 +197,6 @@ test_network_picture_options_requests <- function() {
   checkTrue(grepl("/get_link", sent_requests[[2]]$uri, fixed = TRUE))
   for (request in sent_requests) {
     checkTrue(identical(request$params$add_white_nodes, 2L))
-    checkTrue(identical(request$params$show_query_node_labels, 1L))
     checkEquals(request$params$channel4, "on")
     checkEquals(request$params$channel7, "off")
   }
@@ -219,7 +216,6 @@ test_network_picture_options_requests <- function() {
   checkTrue(fails(string_db$get_png(string_ids, channels = character(0))))
   checkTrue(fails(string_db$get_png(string_ids, add_color_nodes = -1)))
   checkTrue(fails(string_db$get_link(string_ids, add_white_nodes = 1.5)))
-  checkTrue(fails(string_db$get_link(string_ids, show_query_node_labels = "yes")))
   checkEquals(length(sent_requests), 0)
 
   # Version 11.5 ignores the channels: they are not sent, with a warning; the other options are sent.
