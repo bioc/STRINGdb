@@ -1,3 +1,11 @@
+# STRINGdb 2.25.5
+
+## Other changes
+
+- Vignette: the GSEA code is plain code in the vignette's R script (it was commented out there), so
+  it can be run, e.g. in RStudio. It runs only in an interactive R session, not while the vignette
+  is built.
+
 # STRINGdb 2.25.4
 
 ## New features
