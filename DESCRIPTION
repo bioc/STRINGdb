@@ -1,8 +1,8 @@
 Package: STRINGdb
 Type: Package
 Title: STRINGdb - Protein-Protein Interaction Networks and Functional Enrichment Analysis
-Version: 2.25.5
-Date: 2026-11-10
+Version: 2.25.6
+Date: 2026-11-11
 Author: Andrea Franceschini <andrea.franceschini@isb-sib.ch>
 Maintainer: Damian Szklarczyk <damian.szklarczyk@imls.uzh.ch>
 Description: The STRINGdb package provides an R interface to STRING, a

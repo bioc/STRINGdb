@@ -39,7 +39,7 @@ the FDR cutoff of the reported terms. Default 0.05, at most 0.25.
 the time each job may take on STRING, in seconds, from its submission. Default 7200. The time an experiment waits to be submitted does not count.
 }
   \item{quiet}{
-\code{TRUE} to print no progress messages.
+\code{TRUE} to print no progress messages. The messages name each experiment: its column of the table, or, for a vector, the values as you gave them (e.g. \code{mapped$logFC}).
 }
 }
 \details{

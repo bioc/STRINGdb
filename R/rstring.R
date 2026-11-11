@@ -635,7 +635,8 @@ Input parameters:
   "max_fdr"         FDR cutoff of the reported terms. Default 0.05, at most 0.25.
   "rank_direction"  "descending" (default) or "ascending". It only names the ends of the list.
   "timeout"         seconds each job may take, from its submission to STRING. Default 7200.
-  "quiet"           TRUE to print no progress messages.
+  "quiet"           TRUE to print no progress messages. The messages name each experiment: its
+                      column, or for a vector the values as given (e.g. mapped$logFC).
 
 Output:
   A data frame with one row per enriched term, ordered by category, then by FDR. The columns:
@@ -657,6 +658,13 @@ Author(s):
       check_values_ranks_quiet(quiet)
       options <- normalize_values_ranks_options(max_fdr, rank_direction)
       check_values_ranks_timeout(timeout)
+      # the progress messages of a vector of values name it as the caller typed it (e.g.
+      # mapped$logFC); the values alone may come as string_ids
+      if (missing(values)) {
+        values_label <- values_ranks_label_of(substitute(string_ids))
+      } else {
+        values_label <- values_ranks_label_of(substitute(values))
+      }
       # the values alone (a named vector, or a table with STRING identifiers as row names) also work
       ranked_input <- values_ranks_input_of(
         if (missing(string_ids)) NULL else string_ids,
@@ -674,11 +682,18 @@ Author(s):
         submission <- submit_values_ranks_job_when_possible(
           stable_url, species, input$text, key_info, options, timeout, quiet
         )
+        progress_label <- values_ranks_progress_label(values_label)
         if (!quiet) {
-          message("Submitted ", input$n_submitted, " proteins to STRING's values/ranks enrichment (job ", submission$job_id, ").")
+          message(
+            progress_label, ": submitted ", input$n_submitted, " proteins to STRING's values/ranks enrichment (job ",
+            submission$job_id, ")."
+          )
         }
         # the timeout is per job and starts at the submission: the wait for a free slot does not count
-        return(collect_values_ranks_results(stable_url, submission$key_info$key, submission$job_id, timeout, quiet))
+        return(collect_values_ranks_results(
+          stable_url, submission$key_info$key, submission$job_id, timeout, quiet,
+          label = progress_label
+        ))
       }
 
       run <- run_values_ranks_jobs(
@@ -715,6 +730,13 @@ Author(s):
       check_values_ranks_version(version)
       check_values_ranks_quiet(quiet)
       options <- normalize_values_ranks_options(max_fdr, rank_direction)
+      # the progress messages of a vector of values name it as the caller typed it (e.g.
+      # mapped$logFC); the values alone may come as string_ids
+      if (missing(values)) {
+        values_label <- values_ranks_label_of(substitute(string_ids))
+      } else {
+        values_label <- values_ranks_label_of(substitute(values))
+      }
       # the values alone (a named vector, or a table with STRING identifiers as row names) also work
       ranked_input <- values_ranks_input_of(
         if (missing(string_ids)) NULL else string_ids,
@@ -731,7 +753,8 @@ Author(s):
         submission <- submit_first_values_ranks_job(stable_url, species, input$text, key_info, options, quiet)
         if (!quiet) {
           message(
-            "Submitted ", input$n_submitted, " proteins to STRING's values/ranks enrichment (job ", submission$job_id, "). ",
+            values_ranks_progress_label(values_label), ": submitted ", input$n_submitted,
+            " proteins to STRING's values/ranks enrichment (job ", submission$job_id, "). ",
             values_ranks_resume_hint(submission$job_id)
           )
         }

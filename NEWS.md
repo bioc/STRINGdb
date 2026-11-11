@@ -1,3 +1,13 @@
+# STRINGdb 2.25.6
+
+## Other changes
+
+- The progress messages of the values/ranks methods name each experiment instead of STRING's job,
+  e.g. `Experiment logFC: 599 enriched terms`: a column of the table, or, for a vector, the values
+  as given (e.g. `mapped$logFC`). With a table, each experiment gets a message when it finishes or
+  fails. The job id is still given when a job is submitted, and in the messages that say how to
+  get results later.
+
 # STRINGdb 2.25.5
 
 ## Other changes

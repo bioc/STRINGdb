@@ -1830,3 +1830,164 @@ test_values_ranks_timeout_per_job <- function() {
   checkTrue(waits$now > 20)
 
 }
+
+
+# The messages of a call, without the line break that message() adds, and its value.
+messages_of <- function(run) {
+  messages <- character(0)
+  value <- withCallingHandlers(
+    run(),
+    message = function(m) {
+      messages <<- c(messages, sub("\n$", "", conditionMessage(m)))
+      invokeRestart("muffleMessage")
+    }
+  )
+  return(list(value = value, messages = messages))
+}
+
+
+test_values_ranks_progress_labels <- function() {
+
+  # the values of one experiment are named as typed: a variable or a column, otherwise "values"
+  checkEquals("ranked", STRINGdb:::values_ranks_label_of(quote(ranked)))
+  checkEquals("mapped$logFC", STRINGdb:::values_ranks_label_of(quote(mapped$logFC)))
+  checkEquals("mapped[[\"logFC\"]]", STRINGdb:::values_ranks_label_of(quote(mapped[["logFC"]])))
+  checkEquals("results$contrast$logFC", STRINGdb:::values_ranks_label_of(quote(results$contrast$logFC)))
+  checkEquals("values", STRINGdb:::values_ranks_label_of(quote(sign(x) * -log10(p))))
+  checkEquals("values", STRINGdb:::values_ranks_label_of(quote(mapped[[2]])))
+
+  # an experiment is named by its name; a job known only by its id, by "Job" and the id
+  checkEquals("Experiment logFC", STRINGdb:::values_ranks_progress_label("logFC"))
+  checkEquals("Experiment logFC", STRINGdb:::values_ranks_progress_label("logFC", "job1"))
+  checkEquals("Job job1", STRINGdb:::values_ranks_progress_label("job1", "job1"))
+  checkEquals("Experiment A", STRINGdb:::values_ranks_progress_label("A", NA))
+
+  # a message names at most 10 experiments, and says how many more there are
+  checkEquals("A, B", STRINGdb:::values_ranks_names_text(c("A", "B")))
+  checkEquals(
+    paste(paste(LETTERS[1:10], collapse = ", "), "and 2 more"),
+    STRINGdb:::values_ranks_names_text(LETTERS[1:12])
+  )
+
+  # the progress of a wait starts with the experiment's label, or with the job id by default
+  progress_records <- list(
+    status_record("running", "computing statistical enrichment p-values ..."),
+    status_record("success", "Job finished", "https://example.org/download")
+  )
+  waited <- messages_of(function() {
+    STRINGdb:::wait_for_values_ranks_job("u", "key1", "job123", 7200, send = fake_string_json(progress_records),
+                                         sleep = fake_waits()$sleep, label = "Experiment mapped$logFC")
+  })
+  checkEquals("Experiment mapped$logFC: running (computing statistical enrichment p-values ...)", waited$messages)
+  waited <- messages_of(function() {
+    STRINGdb:::wait_for_values_ranks_job("u", "key1", "job123", 7200, send = fake_string_json(progress_records),
+                                         sleep = fake_waits()$sleep)
+  })
+  checkEquals("Job job123: running (computing statistical enrichment p-values ...)", waited$messages)
+
+}
+
+
+test_values_ranks_progress_messages_one_experiment <- function() {
+
+  # the methods name a vector of values as the caller typed it; the job id is given once, when the
+  # job is submitted. The transport functions are replaced for this test (and restored at its end).
+  fake_post <- function(url_str, params, timeout_seconds = 60) {
+    if (grepl("valuesranks_enrichment_submit", url_str, fixed = TRUE)) {
+      return(list(list(job_id = "job123", status = "submitted", message = "")))
+    }
+    return(status_record("success", "Job finished", "https://example.org/download"))
+  }
+  original_post <- get("post_string_json", envir = asNamespace("STRINGdb"))
+  original_get_text <- get("get_string_text", envir = asNamespace("STRINGdb"))
+  assignInNamespace("post_string_json", fake_post, ns = "STRINGdb")
+  assignInNamespace("get_string_text", function(url_str, query = NULL, timeout_seconds = 300) values_ranks_tsv, ns = "STRINGdb")
+  on.exit(assignInNamespace("post_string_json", original_post, ns = "STRINGdb"), add = TRUE)
+  on.exit(assignInNamespace("get_string_text", original_get_text, ns = "STRINGdb"), add = TRUE)
+
+  string_db <- STRINGdb$new(version = "12.5", species = 9606, score_threshold = 400)
+  string_db$stable_url <- "https://127.0.0.1:9"
+  mapped <- data.frame(STRING_id = c("9606.A", "9606.B"), logFC = c(1.5, -2), stringsAsFactors = FALSE)
+  ranked <- setNames(mapped$logFC, mapped$STRING_id)
+
+  with_temporary_key_file({
+    Sys.setenv(STRINGDB_API_KEY = "key1")
+
+    run <- messages_of(function() string_db$get_values_ranks_enrichment(mapped$STRING_id, mapped$logFC))
+    checkEquals(2, nrow(run$value))
+    checkTrue("Experiment mapped$logFC: submitted 2 proteins to STRING's values/ranks enrichment (job job123)." %in% run$messages)
+    checkTrue("Experiment mapped$logFC: 2 enriched terms." %in% run$messages)
+    checkTrue(!any(grepl("STRING job", run$messages, fixed = TRUE)))
+
+    # the values alone, named by STRING identifiers, and a calculation
+    run <- messages_of(function() string_db$get_values_ranks_enrichment(ranked, max_fdr = 0.01))
+    checkTrue("Experiment ranked: 2 enriched terms." %in% run$messages)
+    run <- messages_of(function() string_db$get_values_ranks_enrichment(mapped$STRING_id, mapped$logFC * 2))
+    checkTrue("Experiment values: 2 enriched terms." %in% run$messages)
+
+    run <- messages_of(function() string_db$submit_values_ranks_enrichment(mapped$STRING_id, mapped$logFC))
+    checkEquals("job123", run$value)
+    checkTrue(any(startsWith(run$messages, "Experiment mapped$logFC: submitted 2 proteins to STRING's values/ranks enrichment (job job123).")))
+
+    # the results of a job known only by its id are named by the id
+    run <- messages_of(function() string_db$get_values_ranks_results("job123"))
+    checkTrue("Job job123: 2 enriched terms." %in% run$messages)
+  })
+
+}
+
+
+test_values_ranks_progress_messages_table <- function() {
+
+  options <- STRINGdb:::normalize_values_ranks_options(0.01, "descending")
+  key_info <- list(key = "key1", source = "environment")
+
+  # the experiments of a table are named when they are submitted, and each when it has finished
+  # or failed, with how many have finished
+  waits <- fake_waits()
+  run <- messages_of(function() {
+    STRINGdb:::run_values_ranks_jobs(
+      "https://s", 9606, three_experiments()$experiments, key_info, options,
+      send = fake_values_ranks_server(rounds = 1, failing = "job2"), fetch = fake_download(),
+      sleep = waits$sleep, clock = waits$clock
+    )
+  })
+  checkTrue("Submitted 3 experiments to STRING's values/ranks enrichment: A, B, C." %in% run$messages)
+  checkTrue(any(grepl("^Experiment A: 2 enriched terms \\([123] of 3 experiments finished\\)\\.$", run$messages)))
+  checkTrue(any(grepl("^Experiment B failed: STRING's values/ranks job job2 failed: Error. Something went wrong \\([123] of 3 experiments finished\\)\\.$", run$messages)))
+  checkTrue(any(grepl("(3 of 3 experiments finished).", run$messages, fixed = TRUE)))
+  checkTrue(!any(grepl("values/ranks jobs:", run$messages, fixed = TRUE)))
+
+  # experiments that STRING cannot take now are reported once, and named when they are submitted
+  waits <- fake_waits()
+  run <- messages_of(function() {
+    STRINGdb:::run_values_ranks_jobs(
+      "https://s", 9606, three_experiments()$experiments, key_info, options,
+      send = fake_values_ranks_server(rounds = 1, limit = 2), fetch = fake_download(),
+      sleep = waits$sleep, clock = waits$clock
+    )
+  })
+  checkTrue("Submitted 2 experiments to STRING's values/ranks enrichment: A, B." %in% run$messages)
+  checkEquals(1, sum(grepl("^1 more experiment waits to be submitted \\(Job submission limit reached", run$messages)))
+  checkTrue("Submitted 1 experiment to STRING's values/ranks enrichment: C." %in% run$messages)
+  checkEquals(3, sum(grepl("of 3 experiments finished).", run$messages, fixed = TRUE)))
+
+  # jobs known only by their ids (named by themselves) are named "Job" in the messages
+  log <- new.env()
+  server <- fake_values_ranks_server(rounds = 1, log = log)
+  submitted <- STRINGdb:::run_values_ranks_jobs(
+    "https://s", 9606, three_experiments()$experiments, key_info, options, wait = FALSE, quiet = TRUE,
+    send = server, fetch = fake_download()
+  )
+  job_ids <- unname(submitted$job_ids)
+  names(job_ids) <- job_ids
+  waits <- fake_waits()
+  run <- messages_of(function() {
+    STRINGdb:::run_values_ranks_jobs(
+      "https://s", 9606, list(), key_info, job_ids = job_ids, job_ids_known = TRUE,
+      send = server, fetch = fake_download(), sleep = waits$sleep, clock = waits$clock
+    )
+  })
+  checkTrue(any(grepl("^Job job1: 2 enriched terms \\([123] of 3 jobs finished\\)\\.$", run$messages)))
+
+}

@@ -1245,6 +1245,9 @@ VALUES_RANKS_EXPERIMENTS_IN_WARNING <- 3
 # (values_ranks_jobs_hint).
 VALUES_RANKS_JOB_IDS_IN_MESSAGE <- 20
 
+# The number of experiments named in the message about their submission (values_ranks_names_text).
+VALUES_RANKS_NAMES_IN_MESSAGE <- 10
+
 
 
 # The types of the result columns that are not text. The others are read as text, so that
@@ -1907,11 +1910,13 @@ get_values_ranks_job_status <- function(stable_url, api_key, job_id, send = post
 # failed or expired, when STRING refuses to report it, when timeout_seconds have passed, or
 # after several failed status requests in a row. Every stop for a job that may still be
 # running says how to get its results later. The requests are spaced from 5 s, growing to
-# 30 s. A progress message is printed when the state or its message changes (not only a
-# number in it, such as a position in the queue).
+# 30 s. A progress message, which starts with label (values_ranks_progress_label), is printed
+# when the state or its message changes (not only a number in it, such as a position in the
+# queue).
 wait_for_values_ranks_job <- function(stable_url, api_key, job_id, timeout_seconds, quiet = FALSE,
                                       send = post_string_json, sleep = Sys.sleep,
-                                      clock = function() proc.time()[["elapsed"]]) {
+                                      clock = function() proc.time()[["elapsed"]],
+                                      label = values_ranks_progress_label(job_id, job_id)) {
   resume_hint <- values_ranks_resume_hint(job_id)
   started <- clock()
   interval <- VALUES_RANKS_FIRST_POLL_INTERVAL
@@ -1967,7 +1972,7 @@ wait_for_values_ranks_job <- function(stable_url, api_key, job_id, timeout_secon
         if (nchar(job$message) > 0) {
           details <- paste(" (", job$message, ")", sep = "")
         }
-        message("STRING job ", job_id, ": ", job$status, details)
+        message(label, ": ", job$status, details)
         last_report <- report
       }
     }
@@ -2105,14 +2110,16 @@ set_values_ranks_attributes <- function(results, job_id, job) {
 # addresses as attributes (job_id, page_url, graph_url, download_url, string_version).
 # A download that fails is tried again a few times, as for several jobs (run_values_ranks_jobs).
 # When the wait or the download is interrupted (Ctrl-C) or the download keeps failing, a message
-# says how to get the results later.
+# says how to get the results later. The progress messages start with label
+# (values_ranks_progress_label): the experiment's name, or the job id when only that is known.
 collect_values_ranks_results <- function(stable_url, api_key, job_id, timeout_seconds, quiet = FALSE,
                                          send = post_string_json, fetch = get_string_text, sleep = Sys.sleep,
-                                         clock = function() proc.time()[["elapsed"]]) {
+                                         clock = function() proc.time()[["elapsed"]],
+                                         label = values_ranks_progress_label(job_id, job_id)) {
   resume_hint <- values_ranks_resume_hint(job_id)
 
   job <- withCallingHandlers(
-    wait_for_values_ranks_job(stable_url, api_key, job_id, timeout_seconds, quiet, send, sleep, clock),
+    wait_for_values_ranks_job(stable_url, api_key, job_id, timeout_seconds, quiet, send, sleep, clock, label = label),
     interrupt = function(condition) {
       message("\nThe values/ranks job ", job_id, " keeps running on STRING. ", resume_hint)
     }
@@ -2151,7 +2158,7 @@ collect_values_ranks_results <- function(stable_url, api_key, job_id, timeout_se
   }
 
   if (!quiet) {
-    message("STRING's values/ranks enrichment found ", nrow(results), " terms (job ", job_id, ").")
+    message(label, ": ", count_text(nrow(results), "enriched term"), ".")
   }
   return(results)
 }
@@ -2231,6 +2238,54 @@ values_ranks_names_of <- function(values) {
     return(row_names)
   }
   return(names(values))
+}
+
+
+# The name of the values of one experiment in the progress messages, from the expression that gave
+# them: a variable or a column as the caller typed it (e.g. ranked, mapped$logFC or
+# mapped[["logFC"]]); for any other expression, e.g. a calculation, "values".
+values_ranks_label_of <- function(expression) {
+  is_variable_or_column <- function(part) {
+    if (is.name(part)) {
+      return(TRUE)
+    }
+    is_column <- is.call(part) && length(part) == 3 &&
+      (identical(part[[1]], as.name("$")) || identical(part[[1]], as.name("[[")))
+    if (!is_column) {
+      return(FALSE)
+    }
+    column <- part[[3]]
+    return(is_variable_or_column(part[[2]]) && (is.name(column) || is.character(column)))
+  }
+
+  if (!is_variable_or_column(expression)) {
+    return("values")
+  }
+  return(paste(deparse(expression, width.cutoff = 500L), collapse = ""))
+}
+
+
+# The label of an experiment in the progress messages: "Experiment" and its name (a column of a
+# table, or the values as given, see values_ranks_label_of), or "Job" and the job id for a job
+# known only by its id (get_values_ranks_results with job ids without names, which are then named
+# by themselves).
+values_ranks_progress_label <- function(name, job_id = NA) {
+  if (!is.na(job_id) && identical(name, unname(job_id))) {
+    return(paste("Job", job_id))
+  }
+  return(paste("Experiment", name))
+}
+
+
+# The names of experiments in a message: the first VALUES_RANKS_NAMES_IN_MESSAGE of them, each
+# shortened to 40 characters, and how many more there are.
+values_ranks_names_text <- function(experiment_names) {
+  shown <- experiment_names[seq_len(min(length(experiment_names), VALUES_RANKS_NAMES_IN_MESSAGE))]
+  text <- paste(shorten_text(shown, 40), collapse = ", ")
+  if (length(experiment_names) > length(shown)) {
+    text <- paste(text, " and ", length(experiment_names) - length(shown), " more", sep = "")
+  }
+  return(text)
 }
 
 
@@ -2732,9 +2787,19 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
   held_back_advice <- ""
   timed_out <- FALSE
   submission_timed_out <- FALSE
-  last_report <- ""
   first_submission <- length(job_ids) == 0
   n_experiments <- length(job_ids) + length(pending)
+
+  # the progress messages: the experiments already reported as finished or failed, and whether
+  # the wait of experiments for STRING to take them was reported. Jobs known only by their ids
+  # (get_values_ranks_results with job ids without names) are named by themselves: the messages
+  # then speak of jobs.
+  reported <- character(0)
+  told_held_back <- FALSE
+  progress_noun <- "experiments"
+  if (length(pending) == 0 && length(job_ids) > 0 && all(names(job_ids) == unname(job_ids))) {
+    progress_noun <- "jobs"
+  }
 
   # the start of each job's timeout (its submission; for the jobs of job_ids the start of the
   # run), the start of the wait for a free slot, and the jobs whose wait has ended
@@ -2776,6 +2841,7 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
       # submissions: job_ids grows with each job, so that an interrupt lists all submitted jobs
       if (submitting && length(pending) > 0) {
         submitted_now <- 0
+        submitted_names <- character(0)
         request_failed <- FALSE
         while (length(pending) > 0) {
           experiment_name <- names(pending)[1]
@@ -2833,8 +2899,9 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
             held_back_since <- NA_real_
             first_submission <- FALSE
             submitted_now <- submitted_now + 1
+            submitted_names <- c(submitted_names, experiment_name)
             if (!quiet && submitted_now %% 100 == 0) {
-              message("Submitted ", length(job_ids), " of ", n_experiments, " jobs to STRING's values/ranks enrichment...")
+              message("Submitted ", length(job_ids), " of ", n_experiments, " experiments to STRING's values/ranks enrichment...")
             }
           } else {
             failed[experiment_name] <- step$reason
@@ -2846,7 +2913,10 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
         }
 
         if (!quiet && submitted_now > 0) {
-          message("Submitted ", count_text(submitted_now, "job"), " to STRING's values/ranks enrichment.")
+          message(
+            "Submitted ", count_text(submitted_now, "experiment"), " to STRING's values/ranks enrichment: ",
+            values_ranks_names_text(submitted_names), "."
+          )
         }
         # without waiting, the run ends after the submissions. A submission request that failed is
         # tried again, a few times as with waiting; an experiment that STRING cannot take now (e.g.
@@ -2950,21 +3020,27 @@ run_values_ranks_jobs <- function(stable_url, species, pending, key_info, option
         }
       }
 
-      # a progress message whenever the counts change
-      n_waiting <- length(unfinished())
-      report <- paste(length(results), length(failed), n_waiting, length(pending))
-      if (!quiet && report != last_report) {
-        not_submitted <- ""
-        if (length(pending) > 0) {
-          not_submitted <- paste(", ", length(pending), " not submitted yet (", held_back, ")", sep = "")
+      # a progress message for each experiment that has finished or failed since the last round,
+      # named by its label (values_ranks_progress_label), and one when experiments first wait to
+      # be submitted (STRING cannot take them now; they are submitted as jobs finish)
+      if (!quiet) {
+        for (experiment_name in setdiff(c(names(results), names(failed)), reported)) {
+          reported <- c(reported, experiment_name)
+          label <- values_ranks_progress_label(experiment_name, unname(job_ids[experiment_name]))
+          progress <- paste(" (", length(reported), " of ", n_experiments, " ", progress_noun, " finished).", sep = "")
+          if (experiment_name %in% names(results)) {
+            message(label, ": ", count_text(nrow(results[[experiment_name]]), "enriched term"), progress)
+          } else {
+            message(label, " failed: ", sub("\\.$", "", failed[[experiment_name]]), progress)
+          }
         }
-        message(
-          "STRING's values/ranks jobs: ", length(results), " finished, ", length(failed), " failed, ",
-          n_waiting, " waiting or running", not_submitted, "."
-        )
-        last_report <- report
+        if (length(pending) > 0 && submitting && !told_held_back) {
+          message(count_text(length(pending), "more experiment waits", "more experiments wait"), " to be submitted (", held_back, ").")
+          told_held_back <- TRUE
+        }
       }
 
+      n_waiting <- length(unfinished())
       if (n_waiting == 0 && (length(pending) == 0 || !submitting)) {
         break
       }
