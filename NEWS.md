@@ -53,8 +53,9 @@
   `plot_network()` (such as `hide_node_labels`) must be given by name; `get_enrichment()`'s ignored
   `methodMT`, `iea` and `minScore` are accepted only by name; `get_annotations()` needs `string_ids`.
 - `set_background()` will no longer load the network, and will return `NULL` invisibly.
-- Objects saved with `saveRDS()` by STRINGdb 2.x must be created again with `STRINGdb$new()`; give the
-  same `input_directory` to reuse the downloaded files.
+- STRINGdb objects kept from STRINGdb 2.x (saved with `saveRDS()` or `save()`, or restored with an R
+  workspace, `.RData`) must be created again with `STRINGdb$new()`; give the same `input_directory` to
+  reuse the downloaded files.
 
 # STRINGdb 2.25.6
 
