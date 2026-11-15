@@ -7,7 +7,7 @@
 }
 \usage{data(interactions_example)}
 \format{
-  Data frames with 20861 observations on the following 3 variables.
+  A data frame with 70000 observations on the following 3 variables.
   \describe{
     \item{\code{proteinA}}{a character vector}
     \item{\code{proteinB}}{a character vector}

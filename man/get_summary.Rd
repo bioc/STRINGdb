@@ -1,5 +1,6 @@
 \name{get_summary}
 \alias{\S4method{get_summary}{STRINGdb}}
+\alias{get_summary}
 \title{
 get_summary
 }

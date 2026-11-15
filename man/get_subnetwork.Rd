@@ -1,5 +1,6 @@
 \name{get_subnetwork}
 \alias{\S4method{get_subnetwork}{STRINGdb}}
+\alias{get_subnetwork}
 \title{
 get_subnetwork
 }

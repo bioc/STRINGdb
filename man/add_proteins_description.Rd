@@ -1,5 +1,6 @@
 \name{add_proteins_description}
 \alias{\S4method{add_proteins_description}{STRINGdb}}
+\alias{add_proteins_description}
 \title{
 add_proteins_description
 }

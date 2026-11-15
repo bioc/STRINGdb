@@ -1,5 +1,6 @@
 \name{get_neighbors}
 \alias{\S4method{get_neighbors}{STRINGdb}}
+\alias{get_neighbors}
 \title{
 get_neighbors
 }

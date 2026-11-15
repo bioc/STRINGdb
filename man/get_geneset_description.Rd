@@ -1,5 +1,6 @@
 \name{get_geneset_description}
 \alias{\S4method{get_geneset_description}{STRINGdb}}
+\alias{get_geneset_description}
 \title{
 get_geneset_description
 }

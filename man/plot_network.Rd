@@ -1,5 +1,6 @@
 \name{plot_network}
 \alias{\S4method{plot_network}{STRINGdb}}
+\alias{plot_network}
 \title{
 plot_network
 }

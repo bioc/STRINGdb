@@ -1,5 +1,6 @@
 \name{get_graph}
 \alias{\S4method{get_graph}{STRINGdb}}
+\alias{get_graph}
 \title{
 get_graph
 }

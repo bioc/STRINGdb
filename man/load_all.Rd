@@ -1,5 +1,6 @@
 \name{load_all}
 \alias{\S4method{load_all}{STRINGdb}}
+\alias{load_all}
 \title{
 load_all
 }
@@ -8,7 +9,7 @@ Force download and loading of all the files (so that you can later store the obj
 It makes use of the variables:
 "backgroundV"       vector containing STRING identifiers to be used as background 
                     (i.e. the STRING network loaded will contain only the proteins that are present also in this vector)
-"score_threshold"   STRING combined score threshold (the network loaded contains only interactions having a combined score greater than this threshold)
+"score_threshold"   STRING combined score threshold (the network loaded contains only interactions having a combined score at or above this threshold)
 }
 \usage{
 \S4method{load_all}{STRINGdb}()

@@ -1,5 +1,6 @@
 \name{get_proteins}
 \alias{\S4method{get_proteins}{STRINGdb}}
+\alias{get_proteins}
 \title{
 get_proteins
 }

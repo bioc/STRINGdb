@@ -1,5 +1,6 @@
 \name{remove_homologous_interactions}
 \alias{\S4method{remove_homologous_interactions}{STRINGdb}}
+\alias{remove_homologous_interactions}
 \title{
 remove_homologous_interactions
 }

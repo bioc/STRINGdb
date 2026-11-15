@@ -1,5 +1,6 @@
 \name{mp}
 \alias{\S4method{mp}{STRINGdb}}
+\alias{mp}
 \title{
 mp
 }

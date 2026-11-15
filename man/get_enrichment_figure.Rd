@@ -1,5 +1,6 @@
 \name{get_enrichment_figure}
 \alias{\S4method{get_enrichment_figure}{STRINGdb}}
+\alias{get_enrichment_figure}
 \title{
 get_enrichment_figure
 }

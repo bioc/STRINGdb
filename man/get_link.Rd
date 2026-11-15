@@ -1,5 +1,6 @@
 \name{get_link}
 \alias{\S4method{get_link}{STRINGdb}}
+\alias{get_link}
 \title{
 get_link
 }

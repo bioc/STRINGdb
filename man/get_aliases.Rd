@@ -1,5 +1,6 @@
 \name{get_aliases}
 \alias{\S4method{get_aliases}{STRINGdb}}
+\alias{get_aliases}
 \title{
 get_aliases
 }

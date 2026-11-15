@@ -1,5 +1,6 @@
 \name{get_ppi_enrichment}
 \alias{\S4method{get_ppi_enrichment}{STRINGdb}}
+\alias{get_ppi_enrichment}
 \title{
 get_ppi_enrichment
 }
@@ -17,7 +18,7 @@ a vector of STRING identifiers
 }
 }
 \value{
-Returns a pvalue representing the enrichment in interactions of the list of proteins  (i.e. the probability to obtain such a number of interactions by chance).
+A list with three elements: \code{enrichment}, the p-value of the enrichment in interactions (the probability to obtain at least as many interactions by chance); \code{edges}, the number of interactions among the proteins; and \code{lambda}, the expected number of interactions.
 }
 \author{
 Andrea Franceschini

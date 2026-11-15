@@ -1,5 +1,6 @@
 \name{get_png}
 \alias{\S4method{get_png}{STRINGdb}}
+\alias{get_png}
 \title{
 get_png
 }

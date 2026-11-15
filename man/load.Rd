@@ -12,7 +12,7 @@ For \code{network_type="regulatory"}, the returned \code{igraph} object is direc
 It makes use of the variables:
     "backgroundV"         vector containing STRING identifiers to be used as background 
                             (i.e. the STRING network loaded will contain only the proteins that are present also in this vector)
-    "score_threshold"     STRING combined score threshold (the network loaded contains only interactions having a combined score greater than this threshold)
+    "score_threshold"     STRING combined score threshold (the network loaded contains only interactions having a combined score at or above this threshold)
 }
 \usage{
 \S4method{load}{STRINGdb}()

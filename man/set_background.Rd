@@ -1,5 +1,6 @@
 \name{set_background}
 \alias{\S4method{set_background}{STRINGdb}}
+\alias{set_background}
 \title{
 set_background
 }

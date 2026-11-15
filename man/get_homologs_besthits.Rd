@@ -1,5 +1,6 @@
 \name{get_homologs_besthits}
 \alias{\S4method{get_homologs_besthits}{STRINGdb}}
+\alias{get_homologs_besthits}
 \title{
 get_homologs_besthits
 }
@@ -14,7 +15,7 @@ Returns the list of closest homologs (as measured by bitscore) of the given inpu
 a vector of STRING identifiers.
 }
   \item{target_species_id}{
- NCBI taxonomy identifier of the species to query for homologs (the species must be present in the STRING database)
+NCBI taxonomy identifiers of one or several species to query for homologs, e.g. \code{c(10090, 7227)} (the species must be present in the STRING database). By default, all species.
 }
 }
 \value{

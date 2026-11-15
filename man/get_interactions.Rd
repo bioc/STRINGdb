@@ -1,5 +1,6 @@
 \name{get_interactions}
 \alias{\S4method{get_interactions}{STRINGdb}}
+\alias{get_interactions}
 \title{
 get_interactions
 }

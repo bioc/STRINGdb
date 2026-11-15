@@ -1,5 +1,6 @@
 \name{post_payload}
 \alias{\S4method{post_payload}{STRINGdb}}
+\alias{post_payload}
 \title{
 post_payload
 }

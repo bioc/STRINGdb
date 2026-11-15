@@ -1,5 +1,6 @@
 \name{get_bioc_graph}
 \alias{\S4method{get_bioc_graph}{STRINGdb}}
+\alias{get_bioc_graph}
 \title{
 get_bioc_graph
 }

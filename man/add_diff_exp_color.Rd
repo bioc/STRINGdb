@@ -1,5 +1,6 @@
 \name{add_diff_exp_color}
 \alias{\S4method{add_diff_exp_color}{STRINGdb}}
+\alias{add_diff_exp_color}
 \title{
 add_diff_exp_color
 }
@@ -20,7 +21,8 @@ name of the colum that contains the logFC of the expression
 }
 }
 \value{
-vector containing the colors
+The data frame with an added \code{color} column: red for up-regulated genes and green for down-regulated genes, paler for weaker changes.
+The rows with a positive logFC come first, then the others; rows without a logFC are left out.
 }
 \author{
 Andrea Franceschini
