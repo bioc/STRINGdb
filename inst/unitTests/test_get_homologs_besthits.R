@@ -14,3 +14,29 @@ test_get_homologs_besthits <- function() {
   })
 
 }
+
+
+test_get_homologs_besthits_several_species <- function() {
+
+  # Several target species are sent in one species_b parameter, separated by a carriage return; STRING
+  # does not split the text "%0d" in a form request and would use only the first species. The request
+  # is captured instead of sent: postFormSmart is replaced for this test, and restored at its end.
+  sent_params <- list()
+  capture_request <- function(uri, .params = list(), .opts = list(), .ctype = "text", .stop_on_client_error = FALSE) {
+    sent_params[[length(sent_params) + 1]] <<- .params
+    return("stringId_A\tncbiTaxonId_A\tstringId_B\tncbiTaxonId_B\tbitscore")
+  }
+  original_post_form_smart <- get("postFormSmart", envir = asNamespace("STRINGdb"))
+  assignInNamespace("postFormSmart", capture_request, ns = "STRINGdb")
+  on.exit(assignInNamespace("postFormSmart", original_post_form_smart, ns = "STRINGdb"), add = TRUE)
+
+  string_db <- STRINGdb$new(version = "12.5", species = 9606, score_threshold = 400)
+  string_db$get_homologs_besthits("9606.ENSP00000269305", target_species_id = c(10090, 7227))
+  string_db$get_homologs_besthits("9606.ENSP00000269305", target_species_id = 10090)
+  string_db$get_homologs_besthits("9606.ENSP00000269305")
+
+  checkEquals("10090\r7227", sent_params[[1]]$species_b)
+  checkEquals("10090", sent_params[[2]]$species_b)
+  checkTrue(is.null(sent_params[[3]]$species_b))
+
+}

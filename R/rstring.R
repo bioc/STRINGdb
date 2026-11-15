@@ -151,11 +151,10 @@ Author(s):
         file_version <<- "11.0"
       }
 
+      # API calls always use https, whatever the protocol: STRING redirects http to https, and the
+      # redirect drops the form data of a POST, so every API call over http would fail. The protocol
+      # applies only to the download files.
       stable_url <<- resolved_version$stable_url
-
-      if (tolower(protocol) == "http") {
-        stable_url <<- gsub("https:", "http:", stable_url)
-      }
 
       if (input_directory == "" || is.null(input_directory) || length(input_directory) == 0) input_directory <<- tempdir()
       if (input_directory == "" || is.null(input_directory) || length(score_threshold) == 0 || score_threshold < 1) score_threshold <<- 1
@@ -361,26 +360,34 @@ Author(s):
 
 
     get_clusters = function(string_ids, algorithm = "fastgreedy") {
-
-      if (is_regulatory_network(network_type)) {
-        stop("ERROR: get_clusters does not support the directed regulatory network. Use a functional or physical STRING network for clustering.")
-      }
       '
 Description:
   Returns a list of clusters of interacting proteins.
 
 References:
-  See the iGraph (http://igraph.sourceforge.net/) documentation for additional information on the algorithms.
+  See the igraph documentation (https://igraph.org) for additional information on the algorithms.
   Csardi G, Nepusz T: The igraph software package for complex network research, InterJournal, Complex Systems 1695. 2006.
-  http://igraph.sf.net
 
 Input parameters:
     "string_ids"    a vector of STRING identifiers.
-    "algorithm"     algorithm to use for the clustering (fastgreedy, walktrap,  edge.betweenness)
+    "algorithm"     algorithm to use for the clustering (fastgreedy, walktrap or edge.betweenness)
 
 Author(s):
    Andrea Franceschini
 '
+
+      if (is_regulatory_network(network_type)) {
+        stop("ERROR: get_clusters does not support the directed regulatory network. Use a functional or physical STRING network for clustering.")
+      }
+
+      # checked before the network is loaded, so that a misspelt algorithm stops at once
+      clustering_algorithms <- c("fastgreedy", "walktrap", "edge.betweenness")
+      if (!is.character(algorithm) || length(algorithm) != 1 || !(algorithm %in% clustering_algorithms)) {
+        stop(
+          "ERROR: algorithm should be one of ", paste(clustering_algorithms, collapse = ", "), ".",
+          call. = FALSE
+        )
+      }
 
       if (is.null(graph)) load()
 
@@ -481,7 +488,12 @@ Author(s):
 
       tempDfv <- postFormSmart(urlStr, .params = params)
 
-      ann <- read.table(text = tempDfv, sep = "\t", stringsAsFactors = FALSE, quote = "", fill = TRUE, header = TRUE)
+      # comment.char = "": a description may contain '#', which read.table() would read as the start of
+      # a comment and cut there
+      ann <- read.table(
+        text = tempDfv, sep = "\t", stringsAsFactors = FALSE, quote = "", fill = TRUE, header = TRUE,
+        comment.char = ""
+      )
 
       # ann = renameColDf(ann, "V1", "category")
       # ann = renameColDf(ann, "V2", "term_id")
@@ -541,7 +553,11 @@ Author(s):
       )
 
       response <- postFormSmart(urlStr, .params = params)
-      return(read.table(text = response, sep = "\t", header = TRUE, stringsAsFactors = FALSE, quote = "", fill = TRUE))
+      # comment.char = "": a description may contain '#'
+      return(read.table(
+        text = response, sep = "\t", header = TRUE, stringsAsFactors = FALSE, quote = "", fill = TRUE,
+        comment.char = ""
+      ))
     },
 
     #########################################
@@ -1491,7 +1507,8 @@ Author(s):
 
       PPIselected <- PPI
 
-      if (!is.null(min_homology_bitscore)) PPIselected <- PPI[PPI$V9 >= min_homology_bitscore, ]
+      # column 4 of the homology file is the bitscore (column 9 is the length of the second protein)
+      if (!is.null(min_homology_bitscore)) PPIselected <- PPI[PPI$V4 >= min_homology_bitscore, ]
 
       if (!is.null(backgroundV)) {
         PPIselected <- PPIselected[PPIselected$V1 %in% backgroundV, ]
@@ -1512,7 +1529,8 @@ Author(s):
     get_paralogs = function(string_ids) {
       '
 Description:
-  Returns the list of paralogs of the given input in their species.
+  Returns the similarity (bitscore) between the given proteins, including each protein with itself.
+  It compares only the given proteins: it does not search the whole proteome for paralogs.
 
 Input parameters:
     "string_ids"          a vector of STRING identifiers.
@@ -1559,7 +1577,7 @@ Description:
 
 Input parameters:
     "string_ids"          a vector of STRING identifiers.
-    "target_species_id"   NCBI taxonomy identifier of the species to query for homologs (the species must be present in the STRING database); All spcies by default.
+    "target_species_id"   NCBI taxonomy identifiers of one or several species to query for homologs (the species must be present in the STRING database); all species by default.
 
 Author(s):
    Andrea Franceschini
@@ -1584,7 +1602,10 @@ Author(s):
       if (is.null(target_species_id)) {
         params <- list(identifiers = identifiers, species = species)
       } else {
-        params <- list(species_b = target_species_id, identifiers = identifiers, species = species)
+        # several target species are separated by a carriage return: STRING does not split the text
+        # "%0d" of its documentation in a form request, so it would use only the first species
+        target_species <- paste(target_species_id, collapse = "\r")
+        params <- list(species_b = target_species, identifiers = identifiers, species = species)
       }
 
       tempDfv <- postFormSmart(urlStr, .params = params)
@@ -1833,7 +1854,12 @@ Author(s):
 
       response <- postFormSmart(urlStr, .params = params)
 
-      ann <- read.table(text = response, sep = "\t", stringsAsFactors = FALSE, quote = "", fill = TRUE, header = FALSE)
+      # comment.char = "": a description may contain '#', which read.table() would read as the start of
+      # a comment and cut there
+      ann <- read.table(
+        text = response, sep = "\t", stringsAsFactors = FALSE, quote = "", fill = TRUE, header = FALSE,
+        comment.char = ""
+      )
 
       ann <- renameColDf(ann, "V1", "category")
       ann <- renameColDf(ann, "V2", "term_id")

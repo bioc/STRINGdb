@@ -131,8 +131,11 @@ test_constructor_with_known_version <- function() {
   checkEquals("12.5", string_db$file_version)
   checkEquals("https://version-12-5.string-db.org", string_db$stable_url)
 
+  # API calls keep https with protocol = "http": over http, STRING's redirect to https drops the form
+  # data of every POST. The protocol applies only to the download files.
   string_db <- STRINGdb$new(version = "11.0b", species = 9606, score_threshold = 400, protocol = "http")
   checkEquals("11.0", string_db$file_version)
-  checkEquals("http://version-11-0b.string-db.org", string_db$stable_url)
+  checkEquals("https://version-11-0b.string-db.org", string_db$stable_url)
+  checkEquals("http", string_db$protocol)
 
 }
