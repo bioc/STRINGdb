@@ -1591,12 +1591,14 @@ test_values_ranks_single_waits_and_long_hint <- function() {
   job_ids <- paste("job", 1:25, sep = "")
   names(job_ids) <- paste("experiment", 1:25, sep = "_")
   hint <- STRINGdb:::values_ranks_jobs_hint(job_ids)
-  checkTrue(nchar(hint) < 400)
   job_ids_file <- regmatches(hint, regexpr("readRDS\\(\"[^\"]+\"\\)", hint))
   job_ids_file <- sub("^readRDS\\(\"", "", sub("\"\\)$", "", job_ids_file))
+  on.exit(unlink(job_ids_file), add = TRUE)
+  # the message is short apart from the file's path, which it names twice and whose length depends on
+  # the temporary folder of the system
+  checkTrue(nchar(hint) - 2 * nchar(job_ids_file) < 200)
   checkTrue(file.exists(job_ids_file))
   checkEquals(job_ids, readRDS(job_ids_file))
-  unlink(job_ids_file)
 
   # a few job ids are listed in the message itself
   checkTrue(grepl("c(A = \"job1\", B = \"job2\")", STRINGdb:::values_ranks_jobs_hint(c(A = "job1", B = "job2")), fixed = TRUE))
