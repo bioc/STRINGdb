@@ -73,7 +73,6 @@ Its columns are those of \code{\link{get_enrichment}} where they mean the same:
   \item{inputValues, inputRanks}{list columns with the values of the term's proteins and their ranks in the whole list, in the order of \code{inputGenes}. Paste them into text before \code{write.csv}, e.g. \code{result$inputValues <- vapply(result$inputValues, paste, "", collapse = ",")}, and the same for \code{inputRanks}.}
 }
 The attributes \code{job_id}, \code{page_url}, \code{graph_url}, \code{download_url} and \code{string_version} give the job and its pages on the STRING website.
-In the next Bioconductor release, \code{inputGenes} and \code{preferredNames} will become list columns too.
 
 For a table of values: a list of such data frames, named by experiment.
 Its attribute \code{status} gives the state of each experiment: \code{"success"}, \code{"failed"}, \code{"unfinished"} or \code{"not submitted"}.

@@ -54,7 +54,7 @@ The filters and \code{add_scores} need STRING version 12.5 or later. An older ve
 }
 \value{
 Data frame containing the enrichment in pathways of the vector of STRING proteins that is given in input.
-Its columns \code{inputGenes} and \code{preferredNames} list the term's proteins as comma-separated text; in the next Bioconductor release they will become list columns (a character vector for each term), here and in \code{get_values_ranks_enrichment}.
+Its columns \code{inputGenes} and \code{preferredNames} list the term's proteins as comma-separated text.
 }
 \author{
 Andrea Franceschini

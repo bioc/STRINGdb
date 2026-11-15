@@ -419,8 +419,7 @@ Author(s):
       '
 Description:
   Returns the enrichment for various annotation categories (among others Gene Ontology, KEGG, domains, Reference Publications) for a vector of STRING proteins.
-  The columns inputGenes and preferredNames are comma-separated text; in the next Bioconductor release
-  they will become list columns (a character vector for each term).
+  The columns inputGenes and preferredNames list the proteins of each term as comma-separated text.
 
 Input parameters:
   "string_ids"    a vector of STRING identifiers.

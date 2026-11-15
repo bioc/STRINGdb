@@ -1,3 +1,48 @@
+# STRINGdb 2.25.7
+
+## Bug fixes
+
+- `get_enrichment()`, `get_annotations()` and `get_geneset_description()` keep descriptions that
+  contain `#`; they were cut there.
+- `get_homologs_besthits()` uses every species of `target_species_id`; it used only the first one.
+- `get_homology_graph()`, and so `remove_homologous_interactions()`, filter on the bitscore, as
+  documented, instead of on the length of the second protein. Their results change, also with the
+  default threshold.
+- `get_clusters()` stops with the offered algorithms (fastgreedy, walktrap and edge.betweenness) for
+  any other value, such as `"spinglass"`, which its help page listed.
+- With `protocol = "http"`, the API methods work: they always use https, because STRING's redirect
+  from http drops the data of the request. The protocol applies only to the download files.
+
+## Documentation
+
+- `?get_png`, `?plot_network`, `?get_interactions`, `?mp` and the other method pages now open by name.
+- Corrected help pages: `get_paralogs()` returns the similarity among the given proteins, not all
+  paralogs; `get_annotations()`, `add_diff_exp_color()` and `get_ppi_enrichment()` describe what they
+  really return; the class page describes every setting and method.
+- Vignette: the clustering example uses the most significant genes (it used only up-regulated ones)
+  and shows four clusters, and the paralog example compares the members of the p53 family.
+
+## Planned for the next Bioconductor release (STRINGdb 3.0.0)
+
+- `inputGenes` and `preferredNames` stay comma-separated text. The change to list columns announced in
+  2.25.4 is withdrawn, because `write.csv()` and similar functions cannot write list columns.
+- The `caller_identity` argument will stop with an error, and will be removed in the release after.
+- `STRINGdb$new()` without `species` will warn, and will stop in the release after: give the species,
+  e.g. `species = 9606`.
+- When `input_directory` is not given, the downloaded files will be kept between R sessions, in the
+  folder of `tools::R_user_dir("STRINGdb", "cache")`. `input_directory = ""` keeps meaning a temporary
+  folder.
+- Without `version`, the newest STRING version known to the package will be used, without asking
+  STRING; `version = "latest"` will ask STRING for its current version.
+- Invalid settings, such as a misspelt `network_type` or a `score_threshold` between 0 and 1 (the
+  website's 0.4 is 400), will stop with an error instead of falling back to a default.
+- The methods that have done nothing since 2020 will stop with an error: `benchmark_ppi()`,
+  `benchmark_ppi_pathway_view()`, `enrichment_heatmap()`, `get_homologs()`,
+  `get_pathways_benchmarking_blackList()`, `get_ppi_enrichment_full()`, `get_pubmed()`,
+  `get_pubmed_interaction()` and `plot_ppi_enrichment()`.
+- The network of `get_graph()` will hold each interaction once; today it holds each one twice, which
+  doubles degrees.
+
 # STRINGdb 2.25.6
 
 ## Other changes
@@ -54,13 +99,6 @@
   `plot_network()`: use the full names.
 - igraph's deprecated function names are replaced by their current names.
 - The unit tests that call STRING are deactivated when STRING cannot be reached.
-
-## Planned for the next Bioconductor release
-
-- `inputGenes` and `preferredNames` of `get_enrichment()` and `get_values_ranks_enrichment()` will
-  become list columns instead of comma-separated text (code that splits them with `strsplit()` will
-  need to change).
-- The `caller_identity` argument will be removed.
 
 # STRINGdb 2.25.3
 
