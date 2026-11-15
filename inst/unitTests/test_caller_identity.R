@@ -132,7 +132,7 @@ test_caller_identity_argument_is_ignored <- function() {
   checkEquals("STRINGdb-package", sent$parameters$caller_identity)
   checkEquals(1, length(identity_warnings()))
   checkTrue(grepl("is ignored", identity_warnings(), fixed = TRUE))
-  checkTrue(grepl("removed in the next Bioconductor release, so do not specify it", identity_warnings(), fixed = TRUE))
+  checkTrue(grepl("stop with an error in the next Bioconductor release, so do not specify it", identity_warnings(), fixed = TRUE))
 
   sent <- withCallingHandlers(
     capture_string_request(string_db$get_png("9606.ENSP00000269305", caller_identity = "my-tool")),

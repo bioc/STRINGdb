@@ -5,27 +5,26 @@
 get_term_proteins
 }
 \description{
-Returns the proteins annotated to belong to a given term.
+Deprecated since 2020: this method returns no proteins, only a deprecation warning.
+To get the terms of given proteins, use \code{\link{get_annotations}}.
 }
 \usage{
 \S4method{get_term_proteins}{STRINGdb}(term_ids, string_ids=NULL, enableIEA=TRUE)
 }
 \arguments{
   \item{term_ids}{
-vector of terms
+vector of terms (not used).
 }
   \item{string_ids}{
-a vector of STRING identifiers. If the variable is set, the method returns only the proteins that are present in this vector.
+a vector of STRING identifiers (not used).
 }
   \item{enableIEA}{
-whether to consider also Electronic Inferred Annotations
+not used.
 }
 }
 \value{
-Returns the proteins annotated to belong to a given term.
+The deprecation message, invisibly.
 }
 \author{
 Andrea Franceschini
 }
-
-

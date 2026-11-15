@@ -5,8 +5,8 @@
 get_ppi_enrichment
 }
 \description{
-Returns a pvalue representing the enrichment in interactions of the list of proteins 
-          (i.e. the probability to obtain such a number of interactions by chance).
+Tests whether the given proteins have more interactions among themselves than expected by chance.
+Returns the p-value, with the observed and the expected numbers of interactions.
 The calculation uses the object's selected functional, physical, or regulatory network type.
 }
 \usage{

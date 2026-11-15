@@ -17,7 +17,7 @@ a vector of STRING identifiers.
 }
 }
 \value{
-Data frame with one row per pair of similar input proteins, with columns \code{ncbiTaxonId_A}, \code{stringId_A}, \code{ncbiTaxonId_B}, \code{stringId_B}, and \code{bitscore}.
+Data frame with one row for each protein with itself and two rows (A-B and B-A) for each pair of similar input proteins, with columns \code{ncbiTaxonId_A}, \code{stringId_A}, \code{ncbiTaxonId_B}, \code{stringId_B}, and \code{bitscore}. STRING reports no similarity with a bitscore below 50.
 }
 \author{
 Andrea Franceschini

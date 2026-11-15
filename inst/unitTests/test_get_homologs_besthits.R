@@ -34,9 +34,14 @@ test_get_homologs_besthits_several_species <- function() {
   string_db$get_homologs_besthits("9606.ENSP00000269305", target_species_id = c(10090, 7227))
   string_db$get_homologs_besthits("9606.ENSP00000269305", target_species_id = 10090)
   string_db$get_homologs_besthits("9606.ENSP00000269305")
+  # NA species are left out (STRING would ignore the whole list); none left means all species
+  string_db$get_homologs_besthits("9606.ENSP00000269305", target_species_id = c(10090, NA))
+  string_db$get_homologs_besthits("9606.ENSP00000269305", target_species_id = NA)
 
   checkEquals("10090\r7227", sent_params[[1]]$species_b)
   checkEquals("10090", sent_params[[2]]$species_b)
   checkTrue(is.null(sent_params[[3]]$species_b))
+  checkEquals("10090", sent_params[[4]]$species_b)
+  checkTrue(is.null(sent_params[[5]]$species_b))
 
 }

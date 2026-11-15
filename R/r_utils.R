@@ -134,9 +134,9 @@ caller_identity_warning <- new.env(parent = emptyenv())
 
 
 # get_png, get_link, get_enrichment_figure and get_geneset_description keep their caller_identity
-# argument (default NULL) until the next Bioconductor release, so that older code runs, but the
-# package sends its own caller identity. A given caller_identity gets a warning, once per R
-# session, so that a loop does not repeat it.
+# argument (default NULL) in this release, so that older code runs, but the package sends its own
+# caller identity; in the next Bioconductor release the argument stops with an error. A given
+# caller_identity gets a warning, once per R session, so that a loop does not repeat it.
 warn_ignored_caller_identity <- function(caller_identity) {
   if (is.null(caller_identity) || isTRUE(caller_identity_warning$given)) {
     return(invisible(NULL))
@@ -144,7 +144,7 @@ warn_ignored_caller_identity <- function(caller_identity) {
   caller_identity_warning$given <- TRUE
   warning(
     "The argument caller_identity is ignored: STRINGdb sends its own caller identity to STRING. ",
-    "It will be removed in the next Bioconductor release, so do not specify it.",
+    "It will stop with an error in the next Bioconductor release, so do not specify it.",
     call. = FALSE
   )
   return(invisible(NULL))
@@ -481,9 +481,11 @@ fetch_string_version_table <- function(method, protocol = "https",
 }
 
 
-# Decides the STRING version of a STRINGdb object and its stable address (the
-# constructor changes the address to http when protocol is "http"). Returns a
-# list with the elements version and stable_url.
+# Decides the STRING version of a STRINGdb object and its stable address. The
+# constructor asks with protocol "https" and keeps the https address whatever
+# its own protocol, which applies only to the download files: STRING redirects
+# http to https, and the redirect drops the form data of a POST. Returns a list
+# with the elements version and stable_url.
 #   version              the version asked for; character(0) when none was
 #                        given. A version without a dot gets ".0" ("11"
 #                        becomes "11.0"), as before.

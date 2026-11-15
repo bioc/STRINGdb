@@ -136,9 +136,9 @@ Author(s):
       # A version known to the package takes its stable address from KNOWN_STRING_VERSIONS, without a
       # request to STRING, so that the object can also be created offline. string-db.org is asked only
       # without a version (for its current one) or for a version that the package does not know; see
-      # resolve_string_version.
+      # resolve_string_version. Like every API call, these requests use https, whatever the protocol.
 
-      resolved_version <- resolve_string_version(version, protocol)
+      resolved_version <- resolve_string_version(version, "https")
       version <<- resolved_version$version
 
       if (is_regulatory_network(network_type) &&
@@ -526,7 +526,7 @@ Description:
 
 Input parameters:
   "string_ids"        vector of STRING identifiers.
-  "caller_identity"   ignored, with a warning; removed in the next Bioconductor release, so do not specify it.
+  "caller_identity"   ignored, with a warning; stops with an error in the next Bioconductor release, so do not specify it.
 
 Author(s):
    Damian Szklarczyk
@@ -918,7 +918,7 @@ Input parameters:
   "number_of_term_shown"   maximum number of terms shown on the plot (STRING shows at most 100)
   "x_axis"                 variable used on the x-axis ("signal", "strength", "FDR", "gene_count" or "count",
                            which STRING treats as "gene_count"; count needs STRING version 12.5 or later)
-  "caller_identity"        ignored, with a warning; removed in the next Bioconductor release, so do not specify it
+  "caller_identity"        ignored, with a warning; stops with an error in the next Bioconductor release, so do not specify it
   "graph_type"             "dotplot" (default) or "barplot"
   "sort_by"                variable that decides which terms are shown and in which order
                            ("signal", "strength", "FDR", "gene_count" or "count"; default NULL: the x_axis variable)
@@ -1288,7 +1288,7 @@ Input parameters:
   "flat_node_design"  disables 3D bubble design (TRUE/FALSE or 0/1, default TRUE)
   "center_node_labels"  centers protein names on nodes (TRUE/FALSE or 0/1, default FALSE)
   "custom_label_font_size"   changes the font size of node labels (from 5 to 50, default 12)
-  "caller_identity"   ignored, with a warning; removed in the next Bioconductor release, so do not specify it
+  "caller_identity"   ignored, with a warning; stops with an error in the next Bioconductor release, so do not specify it
   "payload_id"        identifier of payload data on the STRING server (see method post_payload for additional informations)
   "typed_physical_edges"  include physical edges in the typed network view (TRUE/FALSE or 0/1)
   "typed_regulatory_edges"  include regulatory edges in the typed network view (TRUE/FALSE or 0/1)
@@ -1572,7 +1572,7 @@ Author(s):
     get_homologs_besthits = function(string_ids, target_species_id = NULL) {
       '
 Description:
-  Returns the list of closest homologs (as measured by bitscore) of the given input identifiers in all STRING species or single target species.
+  Returns the list of closest homologs (as measured by bitscore) of the given input identifiers in all STRING species, or in the species given by target_species_id.
 
 Input parameters:
     "string_ids"          a vector of STRING identifiers.
@@ -1598,7 +1598,11 @@ Author(s):
         identifiers <- paste(identifiers, id, "%0D", sep = "")
       }
 
-      if (is.null(target_species_id)) {
+      # NA species are left out: STRING would ignore the whole list and search all species. Without
+      # any species left, all species are searched, as without target_species_id.
+      target_species_id <- unique(target_species_id[!is.na(target_species_id)])
+
+      if (length(target_species_id) == 0) {
         params <- list(identifiers = identifiers, species = species)
       } else {
         # several target species are separated by a carriage return: STRING does not split the text
@@ -1780,11 +1784,12 @@ Author(s):
     get_ppi_enrichment = function(string_ids) {
       '
 Description:
-  Returns a pvalue representing the enrichment in interactions of the list of proteins
-          (i.e. the probability to obtain such a number of interactions by chance).
+  Tests whether the given proteins have more interactions among themselves than expected by chance.
+  Returns a list: enrichment (the p-value), edges (the observed number of interactions) and lambda
+  (the expected number).
 
 Input parameters:
-  "string_ids"    a vector of STRING identifiers, sorted.
+  "string_ids"    a vector of STRING identifiers.
 
 
 Author(s):
@@ -1826,10 +1831,11 @@ Author(s):
     get_annotations = function(string_ids = NULL) {
       '
 Description:
-  Returns the term annotation (GO, UniProt Keywords, PFAM etc.) of the given list of proteins.
+  Returns the term annotation (GO, UniProt Keywords, PFAM etc.) of the given list of proteins:
+  every term assigned to at least one of them, without an enrichment test.
 
 Input parameters:
-  "string_ids"      vector of STRING identifiers. If the variable is set, the method returns only the proteins that are present in this vector.
+  "string_ids"      vector of STRING identifiers (at most 2000).
 
 Author(s):
    Damian Szklarczyk
@@ -2002,11 +2008,11 @@ Author(s):
     remove_homologous_interactions = function(interactions_dataframe, bitscore_threshold = 60) {
       '
 Description:
-  With this method it is possible to remove the interactions that are composed by a pair of homologous/similar proteins, having a similarity bitscore between each other higher than a threshold.
+  With this method it is possible to remove the interactions that are composed by a pair of homologous/similar proteins, having a similarity bitscore between each other at or above a threshold.
 
 Input parameters:
   "interactions_dataframe"  a data frame of protein-protein interactions, having the following column names: "proteinA", "proteinB", "score"
-  "bitscore_threshold"       bitscore threshold used to detect the homology (two proteins are considered homologs, if their similarity bitscore is higher than this threshold)
+  "bitscore_threshold"       bitscore threshold used to detect the homology (two proteins are considered homologs, if their similarity bitscore is at or above this threshold)
 
 Author(s):
    Andrea Franceschini
@@ -2310,7 +2316,7 @@ Input parameters:
   "flat_node_design"  disables 3D bubble design (TRUE/FALSE or 0/1, default TRUE)
   "center_node_labels"  centers protein names on nodes (TRUE/FALSE or 0/1, default FALSE)
   "custom_label_font_size"   changes the font size of node labels (from 5 to 50, default 12)
-  "caller_identity"   ignored, with a warning; removed in the next Bioconductor release, so do not specify it
+  "caller_identity"   ignored, with a warning; stops with an error in the next Bioconductor release, so do not specify it
   "typed_physical_edges"  include physical edges in the typed network view (TRUE/FALSE or 0/1)
   "typed_regulatory_edges"  include regulatory edges in the typed network view (TRUE/FALSE or 0/1)
   "show_regulatory_signs"  show positive/negative regulatory signs in the typed network view (TRUE/FALSE or 0/1)

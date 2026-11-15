@@ -46,7 +46,7 @@ centers protein names on nodes. Accepts \code{TRUE}/\code{FALSE} or \code{0}/\co
 changes the font size of the protein names (from 5 to 50).
 }
   \item{caller_identity}{
-ignored, with a warning; it will be removed in the next Bioconductor release, so do not specify it.
+ignored, with a warning; it will stop with an error in the next Bioconductor release, so do not specify it.
 }
   \item{typed_physical_edges}{
 include physical edges in the typed network view. Available only with \code{network_flavor="typed"}. Accepts \code{TRUE}/\code{FALSE} or \code{0}/\code{1}.

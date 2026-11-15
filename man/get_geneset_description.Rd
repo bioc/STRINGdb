@@ -15,7 +15,7 @@ Returns concise primary, secondary, and tertiary descriptions of a protein set u
 a vector of STRING identifiers.
 }
   \item{caller_identity}{
-ignored, with a warning; it will be removed in the next Bioconductor release, so do not specify it.
+ignored, with a warning; it will stop with an error in the next Bioconductor release, so do not specify it.
 }
 }
 \value{

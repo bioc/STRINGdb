@@ -5,7 +5,7 @@
 remove_homologous_interactions
 }
 \description{
-With this method it is possible to remove the interactions that are composed by a pair of homologous/similar proteins, having a similarity bitscore between each other higher than a threshold.
+With this method it is possible to remove the interactions that are composed by a pair of homologous/similar proteins, having a similarity bitscore between each other at or above a threshold.
 }
 \usage{
 \S4method{remove_homologous_interactions}{STRINGdb}(interactions_dataframe, bitscore_threshold = 60)
@@ -15,7 +15,7 @@ With this method it is possible to remove the interactions that are composed by 
  a data frame contaning the sorted interactions to be benchmarked. The data frame should have the following column names: proteinA, proteinB, score
 }
   \item{bitscore_threshold}{
-filter out pairs of homologous proteins, having a similarity bitscore higher than this parameter
+filter out pairs of homologous proteins, having a similarity bitscore at or above this parameter
 }
 }
 \value{

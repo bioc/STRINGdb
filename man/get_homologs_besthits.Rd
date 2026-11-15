@@ -5,7 +5,7 @@
 get_homologs_besthits
 }
 \description{
-Returns the list of closest homologs (as measured by bitscore) of the given input identifiers in all STRING species or single target species.
+Returns the list of closest homologs (as measured by bitscore) of the given input identifiers in all STRING species, or in the species given by \code{target_species_id}.
 }
 \usage{
 \S4method{get_homologs_besthits}{STRINGdb}(string_ids, target_species_id=NULL)

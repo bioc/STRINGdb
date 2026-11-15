@@ -5,27 +5,32 @@
 - `get_enrichment()`, `get_annotations()` and `get_geneset_description()` keep descriptions that
   contain `#`; they were cut there.
 - `get_homologs_besthits()` uses every species of `target_species_id`; it used only the first one.
+  Species given as `NA` are left out.
 - `get_homology_graph()`, and so `remove_homologous_interactions()`, filter on the bitscore, as
   documented, instead of on the length of the second protein. Their results change, also with the
   default threshold.
 - `get_clusters()` stops with the offered algorithms (fastgreedy, walktrap and edge.betweenness) for
   any other value, such as `"spinglass"`, which its help page listed.
-- With `protocol = "http"`, the API methods work: they always use https, because STRING's redirect
-  from http drops the data of the request. The protocol applies only to the download files.
+- With `protocol = "http"`, the API methods work: all requests to STRING's API use https, because
+  STRING's redirect from http drops the data of the request. The protocol applies only to the download
+  files.
 
 ## Documentation
 
-- `?get_png`, `?plot_network`, `?get_interactions`, `?mp` and the other method pages now open by name.
+- `?get_png`, `?plot_network`, `?get_interactions`, `?mp` and the other method pages now open by name
+  (except `load`: `?load` stays base R's page).
 - Corrected help pages: `get_paralogs()` returns the similarity among the given proteins, not all
   paralogs; `get_annotations()`, `add_diff_exp_color()` and `get_ppi_enrichment()` describe what they
-  really return; the class page describes every setting and method.
+  really return; `get_term_proteins()` is marked as deprecated; the class page describes every setting
+  and every working method.
 - Vignette: the clustering example uses the most significant genes (it used only up-regulated ones)
-  and shows four clusters, and the paralog example compares the members of the p53 family.
+  and shows four clusters; the paralog example compares the members of the p53 family;
+  `get_annotations()` leaves out only PubMed (KEGG terms are included); the figures fit the page.
 
 ## Planned for the next Bioconductor release (STRINGdb 3.0.0)
 
-- `inputGenes` and `preferredNames` stay comma-separated text. The change to list columns announced in
-  2.25.4 is withdrawn, because `write.csv()` and similar functions cannot write list columns.
+- `inputGenes` and `preferredNames` stay comma-separated text. The planned change to list columns is
+  withdrawn, because `write.csv()` and similar functions cannot write list columns.
 - The `caller_identity` argument will stop with an error, and will be removed in the release after.
 - `STRINGdb$new()` without `species` will warn, and will stop in the release after: give the species,
   e.g. `species = 9606`.
@@ -34,14 +39,22 @@
   folder.
 - Without `version`, the newest STRING version known to the package will be used, without asking
   STRING; `version = "latest"` will ask STRING for its current version.
-- Invalid settings, such as a misspelt `network_type` or a `score_threshold` between 0 and 1 (the
-  website's 0.4 is 400), will stop with an error instead of falling back to a default.
-- The methods that have done nothing since 2020 will stop with an error: `benchmark_ppi()`,
+- Invalid settings will stop with an error instead of being silently replaced: a misspelt
+  `network_type` (today replaced by `"full"`) or a `score_threshold` between 0 and 1 (today replaced by
+  1; the website's 0.4 is 400).
+- Nine methods that have done nothing since 2020 will stop with an error: `benchmark_ppi()`,
   `benchmark_ppi_pathway_view()`, `enrichment_heatmap()`, `get_homologs()`,
   `get_pathways_benchmarking_blackList()`, `get_ppi_enrichment_full()`, `get_pubmed()`,
-  `get_pubmed_interaction()` and `plot_ppi_enrichment()`.
+  `get_pubmed_interaction()` and `plot_ppi_enrichment()`. `downloadAbsentFileSTRING()`, which no longer
+  works, will stop with an error too.
 - The network of `get_graph()` will hold each interaction once; today it holds each one twice, which
   doubles degrees.
+- Changed without a deprecation step: STRING's display options of `get_png()`, `get_link()` and
+  `plot_network()` (such as `hide_node_labels`) must be given by name; `get_enrichment()`'s ignored
+  `methodMT`, `iea` and `minScore` are accepted only by name; `get_annotations()` needs `string_ids`.
+- `set_background()` will no longer load the network, and will return `NULL` invisibly.
+- Objects saved with `saveRDS()` by STRINGdb 2.x must be created again with `STRINGdb$new()`; give the
+  same `input_directory` to reuse the downloaded files.
 
 # STRINGdb 2.25.6
 

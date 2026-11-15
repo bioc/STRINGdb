@@ -113,7 +113,7 @@ On the top of the plot, we insert a pvalue that represents the probability that 
 options(SweaveHooks=list(fig=function()
 par(mar=c(2.1, 0.1, 4.1, 2.1))))
 @
-\setkeys{Gin}{width=1.2\linewidth}
+\setkeys{Gin}{width=\linewidth}
 
 <<get_hits>>=
 example1_mapped_pval05 <- subset(example1_mapped, pvalue < 0.05)
@@ -237,7 +237,7 @@ head(enrichment_background_corrected, n=20)
 \end{Sinput}
 \end{Schunk}
 
-If you just want to know which terms are assigned to your set of proteins, and not necessarily which ones are enriched, you can use "get\_annotations" method. This method outputs the terms from most categories (the exceptions are KEGG terms due to licensing issues and PubMed due to the size of the output) that are associated with your set of proteins. 
+If you just want to know which terms are assigned to your set of proteins, and not necessarily which ones are enriched, you can use "get\_annotations" method. This method outputs the terms of all categories except PubMed (left out because of the size of the output) that are associated with your set of proteins. 
 
 <<annotations>>=
 annotations <- string_db$get_annotations( hits )
