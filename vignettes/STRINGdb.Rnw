@@ -35,7 +35,7 @@ As you will learn in this guide, the STRING database can be useful to add meanin
 We provide the STRINGdb R package in order to facilitate our users in accessing the STRING database from R.
 In this guide we explain, with examples, most of the package's features and functionalities.\\
 
-In the STRINGdb R package we use the new ReferenceClasses of R (search for "ReferenceClasses" in the R documentation.).  Besides we make use of the iGraph package (http://igraph.sourceforge.net) as a data structure to represent our protein-protein interaction network. \\
+In the STRINGdb R package we use the new ReferenceClasses of R (search for "ReferenceClasses" in the R documentation.).  Besides we make use of the igraph package (https://igraph.org) as a data structure to represent our protein-protein interaction network. \\
 
 To begin, you should first know the NCBI taxonomy identifiers of the organism on which you have performed the experiment (e.g. 9606 for Human, 10090 for mouse). 
 If you don't know that, you can search the NCBI Taxonomy (http://www.ncbi.nlm.nih.gov/taxonomy)  or start looking at our species table (that you can also use to verify that your organism is represented in the STRING database). \\
@@ -103,7 +103,7 @@ example1_mapped <- string_db$map( diff_exp_example1, "gene", removeUnmappedRows 
 \end{Sinput}
 \end{Schunk}
 
-As you may have noticed, the previous command prints a warning showing the number of genes that we failed to map. In this particular example, we cannot map all the probes of the microarray that refer to position of the chromosome that are not assigned to a real gene (i.e. all the LOC genes). If we remove all these LOC genes before the mapping we obtain a much lower percentage of unmapped genes (i.e. < 6 \%). \\
+As you may have noticed, the previous command prints a warning showing the number of genes that we failed to map. In this particular example, we cannot map all the probes of the microarray that refer to position of the chromosome that are not assigned to a real gene (i.e. all the LOC genes). If we remove all these LOC genes before the mapping we obtain a lower percentage of unmapped genes (about 8 \%). \\
 If you set to FALSE the "removeUnmappedRows" parameter, than the rows which corresponds to unmapped genes are left and you can manually inspect them.\\
 Finally, we extract the genes with p-value < 0.05 and, for the examples below, we focus on the top 200 genes sorted by p-value.
 The image shows clearly the genes and how they are possibly functionally related.
@@ -144,16 +144,16 @@ For example, this allows to color in green the genes that are down-regulated and
 For this mechanism to work, we provide a function that posts the information on our web server.
 
 <<add_diff_exp_color>>=
-# filter by p-value and add a color column 
-# (i.e. green down-regulated gened and red for up-regulated genes)
-example1_mapped_pval05 <- string_db$add_diff_exp_color( subset(example1_mapped, pvalue<0.05), 
-                                                            logFcColStr="logFC" )    
+# filter by p-value and add a color column
+# (i.e. green for down-regulated genes and red for up-regulated genes)
+example1_colored <- string_db$add_diff_exp_color( subset(example1_mapped, pvalue<0.05),
+                                                  logFcColStr="logFC" )
 @
 
 <<post_payload>>=
 # post payload information to the STRING server
-payload_id <- string_db$post_payload( example1_mapped_pval05$STRING_id, 
-                                        colors=example1_mapped_pval05$color )
+payload_id <- string_db$post_payload( example1_colored$STRING_id,
+                                        colors=example1_colored$color )
 @
 
 <<plot_halo_network, fig=TRUE>>=
@@ -319,17 +319,18 @@ if (interactive()) {
 
 \section{CLUSTERING}
 
-The iGraph package provides several clustering/community algorithms: "fastgreedy", "walktrap", "spinglass", "edge.betweenness".
+The igraph package provides several clustering/community algorithms. The get\_clusters method offers three of them: "fastgreedy" (the default), "walktrap" and "edge.betweenness".
 We encapsulate this in an easy-to-use function that returns the clusters in a list.
 
 <<clustering1>>=
-# get clusters
+# get clusters of the 600 most significant genes
 clustersList <- string_db$get_clusters(example1_mapped_pval05$STRING_id[1:600])
 @
 
-Now we visualize the first four clusters one by one.
+Now we visualize the first four clusters.
 
 <<clustering2, fig=TRUE>>=
+par(mfrow = c(2, 2))
 par(mar = c(0, 0, 0.5, 0))
 string_db$plot_network(clustersList[[1]], add_summary = FALSE)
 
@@ -463,11 +464,12 @@ interaction_partners_exp
 \end{Schunk}
 
 
-STRING provides a way to get homologous proteins: in our database we store ALL-AGAINST-ALL alignments within species. You can retrieve all paralogs of the protein using "get\_paralogs" method.  
+STRING provides a way to get homologous proteins: in our database we store ALL-AGAINST-ALL alignments within species. The "get\_paralogs" method returns the similarity (bitscore) between the proteins you give it, including each protein with itself. It compares only these proteins, so give it all the proteins you want to compare, here the three members of the p53 family.
 
 <<paralogs, eval=TRUE>>=
-# Get all homologs of TP53 in human.
-string_db$get_paralogs(tp53)
+# similarity among TP53, TP63 and TP73 in human
+p53_family <- string_db$mp(c("TP53", "TP63", "TP73"))
+string_db$get_paralogs(p53_family)
 @
 \begin{Schunk}
 \begin{Sinput}
